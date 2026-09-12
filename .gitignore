@@ -1,0 +1,7 @@
+# Windhawk build output
+*.o
+*.dll
+*.pdb
+
+# Diagnostic log from the development builds
+premiere-theme-colors.log
