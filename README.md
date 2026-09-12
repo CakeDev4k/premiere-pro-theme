@@ -6,6 +6,32 @@ past what the Appearance brightness slider reaches.
 
 Seven palettes, three of them near-black and four tinted, plus a custom one.
 
+## Screenshots
+
+The same project in each palette. First, Premiere without the mod:
+
+![Premiere Pro without the mod](images/stock.png)
+
+**Onyx** — the default: near black, and neutral:
+
+![Onyx palette](images/onyx.png)
+
+**Premiere** — the violet sampled from the app icon:
+
+![Premiere palette](images/premiere.png)
+
+**Comfy** — warm brown, low contrast for long sessions:
+
+![Comfy palette](images/comfy.png)
+
+**Neon** — near black with magenta:
+
+![Neon palette](images/neon.png)
+
+**Glitch** — acid green with a magenta accent:
+
+![Glitch palette](images/glitch.png)
+
 ## Install
 
 1. Install [Windhawk](https://windhawk.net/).
@@ -27,8 +53,8 @@ covers all four:
   families.
 - **`UIFramework.dll`** — Premiere's own drawing layer, for surfaces that fill a
   rectangle without ever consulting the theme.
-- **The Direct2D brush factory** — the one place every solid fill passes
-  through, whoever picked the color.
+- **The Direct2D brush factory** — where most solid fills pass through,
+  whoever picked the color.
 - **Win32** — the title bar, the `File / Edit / Clip` menu bar and the dropdown
   menus, none of which any theme reaches.
 
@@ -58,11 +84,11 @@ Two surfaces are not themed, and the mod says so rather than patching blind:
 
 - **The Home screen**, which is rendered by UXP with its own CSS and hands out
   no color at all.
-- **The band around the video in the monitors**, with a tinted palette. Premiere
-  forces that surround to the channel average of the panel color — deliberately,
-  because a tinted surface next to the picture biases how you read the picture.
-  The near-black palettes do not show it, since averaging a gray returns the
-  same gray.
+- **The band around the video in the monitors**, with a tinted palette. Zoomed
+  out, the monitors paint the area around the picture a gray made from the red
+  channel of the panel color, through a path none of the mod's hooks reaches.
+  On the near-black palettes that is the panel color itself; on a tinted one it
+  reads as a neutral band.
 
 Both are written up in full, with the measurements, in the mod's readme.
 
