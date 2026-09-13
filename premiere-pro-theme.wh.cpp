@@ -1114,13 +1114,18 @@ struct ColorHook {
 struct ColorSymbol {
     const char* mangled;
     const wchar_t* label;
-    bool alternate = false;  // an older spelling of a name listed above it
+    const char* before2026 = nullptr;  // the same function's earlier name
 };
 
 /*
     Not every Premiere version exports everything: 2023 has no `dna` family, which
     only appears in the versions with the newer Spectrum. Whatever is missing is
     logged and the rest carries on.
+
+    Fourteen of them were renamed in Premiere 2026, when Adobe swapped
+    boost::intrusive_ptr for dvacore's own IntrusivePtr in their signatures.
+    That changes the mangled name and nothing else, so those entries carry the
+    earlier name too, and each version exports one of the two.
 */
 static const ColorSymbol kColorSymbols[] = {
     // --- classic theme ---
@@ -1151,27 +1156,45 @@ static const ColorSymbol kColorSymbols[] = {
     {"?GetApplicationBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@"
      "drawbot@3@PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@"
      "@@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetApplicationBackgroundColor"},
+     L"GetApplicationBackgroundColor",
+     "?GetApplicationBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@"
+     "drawbot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@"
+     "dvaui@@@boost@@@Z"},
     {"?GetContentBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@"
      "3@PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetContentBackgroundColor"},
+     L"GetContentBackgroundColor",
+     "?GetContentBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@draw"
+     "bot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvau"
+     "i@@@boost@@@Z"},
     {"?GetListBoxBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@"
      "3@PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetListBoxBackgroundColor"},
+     L"GetListBoxBackgroundColor",
+     "?GetListBoxBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@draw"
+     "bot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvau"
+     "i@@@boost@@@Z"},
     {"?GetHoverBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetHoverBackgroundColor"},
+     L"GetHoverBackgroundColor",
+     "?GetHoverBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbo"
+     "t@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@"
+     "@@boost@@@Z"},
     {"?GetTabBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetTabBackgroundColor"},
+     L"GetTabBackgroundColor",
+     "?GetTabBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@"
+     "3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@"
+     "boost@@@Z"},
     {"?GetThumbnailBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@"
      "drawbot@3@PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@"
      "@@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetThumbnailBackgroundColor"},
+     L"GetThumbnailBackgroundColor",
+     "?GetThumbnailBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@dr"
+     "awbot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dv"
+     "aui@@@boost@@@Z"},
 
     // --- DNA ---
     {"?GrayBackgroundColor@GrayBackgroundColorDNA@dna@dvaui@@QEBAAEBVColorRGBA@"
@@ -1188,99 +1211,59 @@ static const ColorSymbol kColorSymbols[] = {
     {"?GetDefaultControlColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@_N@Z",
-     L"GetDefaultControlColor"},
+     L"GetDefaultControlColor",
+     "?GetDefaultControlColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot"
+     "@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@"
+     "@boost@@_N@Z"},
     {"?GetInteractiveControlColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@"
      "3@PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetInteractiveControlColor"},
+     L"GetInteractiveControlColor",
+     "?GetInteractiveControlColor@utilities@skins@dvaui@@YAAEBVColorRGBA@dra"
+     "wbot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dva"
+     "ui@@@boost@@@Z"},
     {"?GetDividerColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetDividerColor"},
+     L"GetDividerColor",
+     "?GetDividerColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@PEBV"
+     "ThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@boost@"
+     "@@Z"},
     {"?GetListBoxBorderColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetListBoxBorderColor"},
+     L"GetListBoxBorderColor",
+     "?GetListBoxBorderColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@"
+     "3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@"
+     "boost@@@Z"},
     {"?GetFieldBorderColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@@Z",
-     L"GetFieldBorderColor"},
+     L"GetFieldBorderColor",
+     "?GetFieldBorderColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
+     "PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@bo"
+     "ost@@@Z"},
     {"?GetScrollBarThumbColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@_N@Z",
-     L"GetScrollBarThumbColor"},
+     L"GetScrollBarThumbColor",
+     "?GetScrollBarThumbColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot"
+     "@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@"
+     "@boost@@_N@Z"},
     {"?GetScrollBarTrackColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@_N@Z",
-     L"GetScrollBarTrackColor"},
+     L"GetScrollBarTrackColor",
+     "?GetScrollBarTrackColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot"
+     "@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@"
+     "@boost@@_N@Z"},
     {"?GetWidgetColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
      "PEBVThemeProvider@ui@3@V?$IntrusivePtr@VSkinSet@core@skins@dvaui@@"
      "@RefCountedInterface@utility@dvacore@@_N@Z",
-     L"GetWidgetColor"},
-
-    /*
-        The same functions under the name they carry before Premiere 2026.
-        Adobe swapped boost::intrusive_ptr for dvacore's own IntrusivePtr in
-        their signatures, which changes the mangled name and nothing else. The
-        running version resolves one spelling and skips the other.
-    */
-    {"?GetApplicationBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@"
-     "drawbot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@"
-     "dvaui@@@boost@@@Z",
-     L"GetApplicationBackgroundColor (pre-2026)", true},
-    {"?GetContentBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@draw"
-     "bot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvau"
-     "i@@@boost@@@Z",
-     L"GetContentBackgroundColor (pre-2026)", true},
-    {"?GetListBoxBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@draw"
-     "bot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvau"
-     "i@@@boost@@@Z",
-     L"GetListBoxBackgroundColor (pre-2026)", true},
-    {"?GetHoverBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbo"
-     "t@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@"
-     "@@boost@@@Z",
-     L"GetHoverBackgroundColor (pre-2026)", true},
-    {"?GetTabBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@"
-     "3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@"
-     "boost@@@Z",
-     L"GetTabBackgroundColor (pre-2026)", true},
-    {"?GetThumbnailBackgroundColor@utilities@skins@dvaui@@YAAEBVColorRGBA@dr"
-     "awbot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dv"
-     "aui@@@boost@@@Z",
-     L"GetThumbnailBackgroundColor (pre-2026)", true},
-    {"?GetDefaultControlColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot"
-     "@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@"
-     "@boost@@_N@Z",
-     L"GetDefaultControlColor (pre-2026)", true},
-    {"?GetInteractiveControlColor@utilities@skins@dvaui@@YAAEBVColorRGBA@dra"
-     "wbot@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dva"
-     "ui@@@boost@@@Z",
-     L"GetInteractiveControlColor (pre-2026)", true},
-    {"?GetDividerColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@PEBV"
-     "ThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@boost@"
-     "@@Z",
-     L"GetDividerColor (pre-2026)", true},
-    {"?GetListBoxBorderColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@"
-     "3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@"
-     "boost@@@Z",
-     L"GetListBoxBorderColor (pre-2026)", true},
-    {"?GetFieldBorderColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@"
-     "PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@bo"
-     "ost@@@Z",
-     L"GetFieldBorderColor (pre-2026)", true},
-    {"?GetScrollBarThumbColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot"
-     "@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@"
-     "@boost@@_N@Z",
-     L"GetScrollBarThumbColor (pre-2026)", true},
-    {"?GetScrollBarTrackColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot"
-     "@3@PEBVThemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@"
-     "@boost@@_N@Z",
-     L"GetScrollBarTrackColor (pre-2026)", true},
-    {"?GetWidgetColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@PEBVT"
+     L"GetWidgetColor",
+     "?GetWidgetColor@utilities@skins@dvaui@@YAAEBVColorRGBA@drawbot@3@PEBVT"
      "hemeProvider@ui@3@V?$intrusive_ptr@VSkinSet@core@skins@dvaui@@@boost@@"
-     "_N@Z",
-     L"GetWidgetColor (pre-2026)", true},
-
+     "_N@Z"},
 };
 
 constexpr size_t kColorSymbolCount = ARRAYSIZE(kColorSymbols);
@@ -1302,7 +1285,7 @@ struct HookCount {
     int missing = 0;
 };
 
-static bool InstallHook(HMODULE module, const HookSpec& spec, HookCount* count) {
+static void InstallHook(HMODULE module, const HookSpec& spec, HookCount* count) {
     FARPROC proc = GetProcAddress(module, spec.mangled);
     bool installed = false;
 
@@ -1318,8 +1301,6 @@ static bool InstallHook(HMODULE module, const HookSpec& spec, HookCount* count) 
     if (count) {
         (installed ? count->installed : count->missing)++;
     }
-
-    return installed;
 }
 
 template <size_t N>
@@ -1334,19 +1315,15 @@ static void InstallOneColorHook(HMODULE dvaui, size_t index, void* hook,
                                 void** original, HookCount& count) {
     const ColorSymbol& sym = kColorSymbols[index];
 
-    /*
-        An older spelling only exists where the newer name listed above it is
-        missing, and that name was already counted absent. So a missing
-        alternate is not counted again, and one that resolves takes the
-        absence back: the log reports functions, not spellings.
-    */
-    bool installed = InstallHook(dvaui, {sym.mangled, hook, original, sym.label},
-                                 sym.alternate ? nullptr : &count);
+    // A version exports one of the two names, so a function is only counted
+    // and logged as absent when it has neither.
+    const char* mangled = sym.mangled;
 
-    if (sym.alternate && installed) {
-        count.installed++;
-        count.missing--;
+    if (sym.before2026 && !GetProcAddress(dvaui, mangled)) {
+        mangled = sym.before2026;
     }
+
+    InstallHook(dvaui, {mangled, hook, original, sym.label}, &count);
 }
 
 template <size_t... I>
