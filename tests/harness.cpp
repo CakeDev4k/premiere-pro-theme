@@ -924,7 +924,7 @@ static void TestGdiMatchesOldFormula() {
         COLORREF target = PickTarget(CurrentSettings(), v);
 
         auto channel = [&](int targetChannel) {
-            float blended = Blend(v, targetChannel / 255.0f);
+            float blended = BlendWith(CurrentSettings().strength, v, targetChannel / 255.0f);
             return ClampInt(static_cast<int>(blended * 255.0f + 0.5f), 0, 255);
         };
 
@@ -1196,6 +1196,9 @@ static void TestStylesheetRedirect() {
           size.QuadPart == static_cast<LONGLONG>(original.size()));
     CHECK(ReadAllFrom(copy) == themed);
 
+    DWORD wrote = 0;
+    CHECK(!WriteFile(copy, "x", 1, &wrote, nullptr));  // only the rights it asked for
+
     wchar_t copyPath[MAX_PATH + 8]{};
     CHECK(GetFinalPathNameByHandleW(copy, copyPath, ARRAYSIZE(copyPath), 0) > 0);
     CloseHandle(copy);
@@ -1277,6 +1280,62 @@ static void TestStylesheetRedirect() {
     CreateFile2_Original = nullptr;
 }
 
+/*
+    A value the mod produced is also a real Premiere gray: Onyx turns #3F3F3F
+    into #1D1D1D, the stock panel gray. Only the paint that produced it may
+    skip it, so a later #1D1D1D fill still converts.
+*/
+static void TestProducedIsRecentOnly() {
+    g_fakePalette = L"onyx";
+    LoadSettings();
+    ForgetRecentProduced();
+
+    static DvaColorRGBA header = Gray(0x3F);
+    static DvaColorRGBA panel = Gray(0x1D);
+    static DvaColorRGBA light = Gray(0xE0);
+    DvaColorRGBA out{};
+
+    CHECK(PaintFromBelow(&header, &out));
+    CHECK(DvaToGdi(out) == RGB(0x1D, 0x1D, 0x1D));  // the collision
+
+    // In the same paint #1D1D1D may be that very color copied back: left alone.
+    CHECK(!PaintFromBelow(&panel, &out));
+
+    // The next paint starts clean, and the real panel gray converts.
+    DispatchDrawFromRoot_Original = FakeDispatch;
+    DispatchDrawFromRoot_Hook(nullptr, &light, nullptr, false);
+    CHECK(PaintFromBelow(&panel, &out));
+    CHECK(DvaToGdi(out) != RGB(0x1D, 0x1D, 0x1D));
+
+    // Without a paint boundary it ages out as the thread produces other colors.
+    CHECK(PaintFromBelow(&header, &out));
+
+    static DvaColorRGBA others[kRecentProduced];
+
+    for (int i = 0; i < kRecentProduced; i++) {
+        others[i] = Gray(0x28 + i);  // outputs 0x10..0x17, never an input here
+        CHECK(PaintFromBelow(&others[i], &out));
+    }
+
+    CHECK(PaintFromBelow(&panel, &out));
+
+    ForgetRecentProduced();
+}
+
+static void TestExplorerThemeClasses() {
+    HWND bar = CreateWindowExW(0, L"ScrollBar", L"", WS_POPUP, 0, 0, 10, 10, nullptr,
+                               nullptr, nullptr, nullptr);
+    HWND label = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 10, 10, nullptr,
+                                 nullptr, nullptr, nullptr);
+
+    CHECK(bar && WantsExplorerTheme(bar));
+    CHECK(label && !WantsExplorerTheme(label));  // everything else: no WM_THEMECHANGED
+    CHECK(!WantsExplorerTheme(nullptr));
+
+    DestroyWindow(bar);
+    DestroyWindow(label);
+}
+
 // Last: it fills the table.
 static void TestSlotSaturation() {
     LoadSettings();
@@ -1318,6 +1377,8 @@ int main() {
     TestStylesheetRewrite();
     TestBundledStylesheetPath();
     TestStylesheetRedirect();
+    TestProducedIsRecentOnly();
+    TestExplorerThemeClasses();
     TestSlotSaturation();
 
     if (g_failures) {
