@@ -159,11 +159,13 @@ shared as text and imported by pasting it into **Custom theme (JSON)**:
 | `highlight`      | optional | the hue Premiere's blue takes; the blue stays when left out     |
 | `name`, `author` | optional | written to the log                                              |
 
-Colors are `"#RRGGBB"`. Keys the mod does not know are ignored, and so is
-whatever was copied around the braces — a code fence, a line of chat. A theme
-that is not valid JSON is not applied at all: Onyx stays, and the log says where
-the JSON stops making sense. A required color that is missing or unreadable
-falls back to Onyx's, and the log names it.
+Colors are `"#RRGGBB"`. An optional key can also be left empty, `""`, for its
+default, so `"highlight": ""` keeps Premiere's blue. The setting starts out with
+every key present and Onyx's colors, ready to edit. Keys the mod does not know
+are ignored, and so is whatever was copied around the braces — a code fence, a
+line of chat. A theme that is not valid JSON is not applied at all: Onyx stays,
+and the log says where the JSON stops making sense. A required color that is
+missing or unreadable falls back to Onyx's, and the log names it.
 
 Keep the five steps dark and in order, darkest first: Premiere's own text is
 light and is not recolored, so a light background leaves it unreadable. The
@@ -289,13 +291,14 @@ This mod is MIT as well.
   - crimson: Crimson — near black with a strong red
   - threshold: Threshold — the threshold-editor.com.br palette
   - custom: Custom — the theme JSON below
-- customTheme: '{"name": "Onyx", "base": "#050505", "panel": "#090909", "surface": "#0E0E0E", "raised": "#161616", "border": "#242424", "text": "#E6E6E6", "accent": "#2E2E2E"}'
+- customTheme: '{"name": "My theme", "author": "", "base": "#050505", "panel": "#090909", "surface": "#0E0E0E", "raised": "#161616", "border": "#242424", "text": "#E6E6E6", "disabledText": "#777777", "accent": "#2E2E2E", "highlight": ""}'
   $name: Custom theme (JSON)
   $description: >-
-    Used when the palette is Custom. Paste a theme someone shared, or write your
-    own: base, panel, surface, raised, border and text are required; accent,
-    disabledText and highlight are optional; colors are "#RRGGBB". The readme
-    has the full format.
+    Used when the palette is Custom. Paste a theme someone shared, or edit this
+    one, which starts with every key and Onyx's colors. Colors are "#RRGGBB".
+    base, panel, surface, raised, border and text are required; accent,
+    disabledText and highlight can be left empty for their defaults, and an
+    empty highlight keeps Premiere's blue. The readme has the full format.
 - strength: 100
   $name: Strength
   $description: How much of the palette is applied over the original color, in percent. 100 = palette only.
@@ -4522,6 +4525,7 @@ struct ThemeMember {
     std::wstring key;
     std::wstring value;
     bool isString = false;
+    bool isNull = false;
 };
 
 static void SkipJsonSpace(JsonCursor& c) {
@@ -4805,6 +4809,7 @@ static bool ReadThemeMembers(PCWSTR text, std::vector<ThemeMember>* members,
             SkipJsonSpace(c);
 
             member.isString = c.p < c.end && *c.p == L'"';
+            member.isNull = c.p < c.end && *c.p == L'n';  // SkipJsonValue checks the rest
             ok = member.isString ? ReadJsonString(c, &member.value)
                                  : SkipJsonValue(c, 1);
         }
@@ -4894,11 +4899,15 @@ static Palette LoadCustomTheme(const Palette& onyx) {
         }
     }
 
-    // Present but unreadable is worth a line; absent just takes the default.
+    /*
+        Absent, empty or null takes the default without a word — the shipped
+        template lists every key, with "highlight": "" — while a value that is
+        there but unreadable is worth a line.
+    */
     auto optional = [&](PCWSTR key, COLORREF* color) {
         const ThemeMember* member = FindThemeMember(members, key);
 
-        if (!member) {
+        if (!member || member->isNull || (member->isString && member->value.empty())) {
             return false;
         }
 
@@ -4932,8 +4941,8 @@ static Palette LoadCustomTheme(const Palette& onyx) {
     const ThemeMember* name = FindThemeMember(members, L"name");
     const ThemeMember* author = FindThemeMember(members, L"author");
 
-    if (name && name->isString) {
-        bool by = author && author->isString;
+    if (name && name->isString && !name->value.empty()) {
+        bool by = author && author->isString && !author->value.empty();
 
         Wh_Log(L"custom theme: %.64s%s%.64s", name->value.c_str(),
                by ? L", by " : L"", by ? author->value.c_str() : L"");
