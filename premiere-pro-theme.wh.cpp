@@ -2,7 +2,7 @@
 // @id              premiere-pro-theme
 // @name            Premiere Pro Theme
 // @description     Recolors the Adobe Premiere Pro interface — panels, timeline, monitors, window frame and menu bar — with a choice of very dark palettes.
-// @version         1.0.0
+// @version         1.1.0
 // @author          Threshold Editor
 // @license         MIT
 // @include         Adobe Premiere Pro.exe
@@ -51,13 +51,13 @@ gray `#1D1D1D`, under the light title bar and menu bar that Windows gives it.
 
 Neutral:
 
-| Level   | Onyx      | Abyss     | Graphite  |
-|---------|-----------|-----------|-----------|
-| Base    | `#050505` | `#000000` | `#0D0D0D` |
-| Panel   | `#090909` | `#040404` | `#141414` |
-| Surface | `#0E0E0E` | `#080808` | `#1A1A1A` |
-| Raised  | `#161616` | `#101010` | `#232323` |
-| Border  | `#242424` | `#1C1C1C` | `#303030` |
+| Level   | Onyx      | Abyss     | Graphite  | Contrast  |
+|---------|-----------|-----------|-----------|-----------|
+| Base    | `#050505` | `#000000` | `#0D0D0D` | `#000000` |
+| Panel   | `#090909` | `#040404` | `#141414` | `#060606` |
+| Surface | `#0E0E0E` | `#080808` | `#1A1A1A` | `#101010` |
+| Raised  | `#161616` | `#101010` | `#232323` | `#202020` |
+| Border  | `#242424` | `#1C1C1C` | `#303030` | `#4A4A4A` |
 
 Tinted:
 
@@ -71,14 +71,60 @@ Tinted:
 | Text    | `#D2D2F7` | `#EDE0D0` | `#FAF5EF` | `#E9F7C0` |
 | Accent  | `#3A3A99` | `#5A4028` | `#5C1F47` | `#B8157A` |
 
+Vivid — the hue is in the ramp, so the panels themselves carry it:
+
+| Level     | Violet    | Blossom   | Ember     | Crimson   |
+|-----------|-----------|-----------|-----------|-----------|
+| Base      | `#0A0414` | `#120A0E` | `#0C0703` | `#0D0405` |
+| Panel     | `#120827` | `#180D13` | `#140B04` | `#150609` |
+| Surface   | `#1C0C3B` | `#241320` | `#1F1206` | `#200A0E` |
+| Raised    | `#2A1257` | `#341B2E` | `#2E1A08` | `#300F15` |
+| Border    | `#4B2088` | `#5A2C4A` | `#55300C` | `#591A24` |
+| Text      | `#E2D4FA` | `#FBDCE8` | `#FBE3C8` | `#F7D9DD` |
+| Accent    | `#6D28D9` | `#864160` | `#944108` | `#B91C1C` |
+| Highlight | `#7737DC` | `#934869` | `#9F4608` | `#BB2222` |
+
+Strong accent on near black — the panels stay neutral, and the color is only the
+edge, the accent and the highlight:
+
+| Level     | Amethyst  | Threshold |
+|-----------|-----------|-----------|
+| Base      | `#050507` | `#050505` |
+| Panel     | `#09090D` | `#0A0A0A` |
+| Surface   | `#0F0F16` | `#121212` |
+| Raised    | `#181823` | `#1C1C1C` |
+| Border    | `#33254F` | `#2B2B2B` |
+| Text      | `#E4DCF2` | `#FFFFFF` |
+| Accent    | `#6730C6` | `#DC2626` |
+| Highlight | `#7537DF` | `#BC2020` |
+
 **Premiere** takes its violet from the app's own icon. **Neon** and **Glitch**
 come from reference artwork; in Glitch the acid green would be far too bright as
 background, so it tints the black and the magenta becomes the accent. **Comfy**
 is warm brown, lower in contrast and the lightest of the set, for long sessions.
 
+**Contrast** is the widest neutral: black panels with a `#4A4A4A` border, so the
+dividers and edges stay as legible as Spectrum's while the surfaces go black.
+**Violet** and **Blossom** put the hue in the ramp; **Amethyst** and **Crimson**
+are the same two hues held out of the ramp instead, on near-black panels.
+**Blossom** is pastel in the text and the border rather than the background: the
+mod only darkens, and a pastel background would leave Premiere's own light text
+— which passes through untouched — unreadable on it. Every accent stays at
+least 4.5:1 against its own palette's text, so a hovered menu item reads. **Threshold** is the
+palette of threshold-editor.com.br, its `#050505`, `#FFFFFF` and `#DC2626` used
+as they are on the site.
+
 The accent is kept out of the ramp: the ramp is interpolated, and a strong color
 in it would tint half the interface. It only shows on hovered menu items and
 system highlights.
+
+Contrast, Violet, Blossom, Ember, Amethyst, Crimson and Threshold also carry a
+**highlight**: the hue Premiere's blue takes. Track targeting, the focused
+panel's border, the active tool, selections and links change hue, each blue at
+its own brightness, so white text on a blue button keeps the contrast it had.
+The tables give the track-targeting shade; Contrast's is the gray `#606060`. The
+other palettes keep Adobe's blue, and the **Palette highlight** setting keeps it
+on any palette.
 
 ## What it changes, and what it leaves alone
 
@@ -92,9 +138,15 @@ Each layer has its own switch in the settings:
 - **Menu bar and menus** — the File / Edit / Clip bar and its dropdowns.
 - **GDI surfaces** — brushes, pens and text backgrounds created by Premiere's
   own modules.
+- **UXP panels** — the Text panel, Import, Export, Quick Export, Progress,
+  Preset Manager and the Home screen, which Premiere draws from stylesheets of
+  their own.
+- **Palette highlight** — Premiere's blue, on the palettes that carry a
+  highlight.
 
-Saturated colors — selection blue, clips, labels, warnings — pass through
-untouched, and so does anything above the **brightness ceiling**: text, icons,
+Saturated colors — clips, labels, warnings, and Premiere's blue unless the
+palette carries a highlight — pass through untouched, and so does anything
+above the **brightness ceiling**: text, icons,
 and the `#4B4B4B` Spectrum uses for disabled text. Colors that are content
 rather than interface are left alone whatever they are: the color picker's
 swatches, marker colors, Essential Graphics, and the parameter colors Effect
@@ -124,16 +176,24 @@ mod's process **exclusion** list and this one takes over.
 
 ## Known limitations
 
-**The Home screen** is rendered by UXP, Adobe's newer runtime, which styles
-itself with its own CSS and hands out no color to intercept. Premiere's
-preferences can open the most recent project directly instead.
+**UXP panels follow a change after a restart.** The Text panel, Import, Export,
+Quick Export, Progress, Preset Manager and the Home screen are UXP plugins,
+drawn from stylesheets with the Spectrum grays written into them rather than
+from the theme. The mod answers Premiere's read of each stylesheet with a
+recolored copy, deleted as soon as Premiere closes it, so these panels follow
+the palette — but Premiere reads them once, when a panel first loads. A palette
+switch, or disabling the mod, shows there after Premiere restarts. Frame.io and
+Adobe Stock keep their own look: their stylesheets carry no Spectrum grays.
 
 **The band around the video, with a tinted palette.** Zoomed out, the monitors
 paint the area around the picture a gray taken from the red channel of the
-panel color, and keep it until Premiere restarts. On the neutral palettes it
-matches the panels; with a hue it shows as a neutral band — Glitch panels
-`#101907` give `#101010`. Where it is painted has not been found, so the mod
-leaves it as it is rather than patch blind.
+panel color, and keep it until Premiere restarts. On the neutral palettes —
+Onyx, Abyss, Graphite, Contrast and Threshold — it matches the panels; with a
+hue it shows as a neutral band — Glitch panels `#101907` give `#101010`. The
+warm palettes are drawn around this: red is the widest channel in Ember,
+Crimson and Blossom, so their panels keep it low and carry the color in the
+border and the accent, which the band does not read. Where it is painted has
+not been found, so the mod leaves it as it is rather than patch blind.
 
 The black *inside* the sequence frame is the rendered picture, not chrome, and
 stays black in every palette.
@@ -178,6 +238,13 @@ This mod is MIT as well.
   - comfy: Comfy — warm brown, low contrast for long sessions
   - neon: Neon — near black with magenta
   - glitch: Glitch — acid green with a magenta accent
+  - contrast: Contrast — black panels, light dividers, pure white text
+  - violet: Violet — a purple interface, not just a purple accent
+  - blossom: Blossom — dark rose with pastel pink text and accent
+  - ember: Ember — near black with a strong orange
+  - amethyst: Amethyst — near black with a strong purple
+  - crimson: Crimson — near black with a strong red
+  - threshold: Threshold — the threshold-editor.com.br palette
   - custom: Custom (uses the fields below)
 - customBase: "050505"
   $name: Custom — base
@@ -224,6 +291,20 @@ This mod is MIT as well.
 - gdiHook: true
   $name: GDI surfaces
   $description: Darkens GDI brushes, pens and text backgrounds created by Premiere's own modules.
+- uxpPanels: true
+  $name: UXP panels
+  $description: >-
+    The Text panel, Import, Export, Quick Export, Progress, Preset Manager and
+    the Home screen, which Premiere draws from stylesheets of their own. Those
+    are read when a panel loads, so this switch and a palette change show there
+    after Premiere restarts.
+- highlight: true
+  $name: Palette highlight
+  $description: >-
+    Gives Premiere's blue — track targeting, the focused panel's border, the
+    active tool, selections and links — the palette's own hue, each blue at its
+    own brightness. Only Contrast, Violet, Blossom, Ember, Amethyst, Crimson and
+    Threshold carry one; the other palettes keep the blue.
 */
 // ==/WindhawkModSettings==
 
@@ -264,7 +345,41 @@ struct Palette {
         accent only shows on hovered menu items and system highlights.
     */
     COLORREF accent;
+
+    /*
+        The hue Premiere's blue takes: track targeting, the focused panel's
+        border, the active tool. Each blue keeps its own luminance and takes
+        only the hue, so white text on a blue button keeps its contrast.
+        CLR_INVALID keeps the blue, as the palettes before 1.1 do.
+    */
+    COLORREF highlight = CLR_INVALID;
 };
+
+/*
+    Premiere's interface blues, as dvaui's color tables and the bundled UXP
+    stylesheets hold them: the Spectrum 2 ramp dvaui draws the interface with,
+    then the Spectrum 1 values the UXP panels still carry. Matched exactly,
+    never by hue: dvaui holds hundreds of blues, and a clip label or a picked
+    color that merely looks blue is content, not interface.
+*/
+constexpr COLORREF kInterfaceBlues[] = {
+    // Spectrum 2, dvaui's blue ramp
+    RGB(0x00, 0x26, 0x51), RGB(0x00, 0x32, 0x6A), RGB(0x00, 0x40, 0x87),
+    RGB(0x00, 0x4E, 0xA6), RGB(0x00, 0x5C, 0xC8), RGB(0x06, 0x6C, 0xE7),
+    RGB(0x1D, 0x80, 0xF5), RGB(0x40, 0x96, 0xF3), RGB(0x5E, 0xAA, 0xF7),
+    RGB(0x7C, 0xBD, 0xFA), RGB(0x98, 0xCE, 0xFD), RGB(0xB3, 0xDE, 0xFE),
+    RGB(0xCE, 0xEA, 0xFF), RGB(0xE3, 0xF3, 0xFF),
+
+    // Spectrum 1, in the UXP stylesheets
+    RGB(0x00, 0x41, 0x8A), RGB(0x00, 0x44, 0x91), RGB(0x00, 0x54, 0xB6),
+    RGB(0x02, 0x65, 0xDC), RGB(0x09, 0x5A, 0xBA), RGB(0x0D, 0x66, 0xD0),
+    RGB(0x14, 0x73, 0xE6), RGB(0x14, 0x7A, 0xF3), RGB(0x26, 0x80, 0xEB),
+    RGB(0x34, 0x8F, 0xF4), RGB(0x37, 0x8E, 0xF0), RGB(0x4B, 0x9C, 0xF5),
+    RGB(0x54, 0xA3, 0xF6), RGB(0x5A, 0xA9, 0xFA), RGB(0x72, 0xB7, 0xF9),
+    RGB(0x8F, 0xCA, 0xFC),
+};
+
+constexpr size_t kInterfaceBlueCount = ARRAYSIZE(kInterfaceBlues);
 
 struct Settings {
     Palette palette;
@@ -275,6 +390,11 @@ struct Settings {
     bool nativeDarkMode;
     bool menuHook;
     bool gdiHook;
+    bool uxpPanels;
+    bool highlight;  // the palette carries one, and the setting is on
+
+    // What each of kInterfaceBlues becomes, computed with the palette.
+    COLORREF highlightShades[kInterfaceBlueCount];
 };
 
 Settings g_settings;
@@ -293,6 +413,61 @@ static int ClampInt(int v, int lo, int hi) {
 
 static float Blend(float original, float target) {
     return original * (1.0f - g_settings.strength) + target * g_settings.strength;
+}
+
+// WCAG relative luminance: the measure a contrast ratio is built on.
+static float LinearChannel(float c) {
+    return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+}
+
+static float LuminanceOf(float r, float g, float b) {
+    return 0.2126f * LinearChannel(r) + 0.7152f * LinearChannel(g) +
+           0.0722f * LinearChannel(b);
+}
+
+static float Luminance(COLORREF c) {
+    return LuminanceOf(GetRValue(c) / 255.0f, GetGValue(c) / 255.0f,
+                       GetBValue(c) / 255.0f);
+}
+
+/*
+    The tone of `hue` with the given luminance, along black → hue → white: a
+    dark target gives a shade of the hue, a light one a tint. Luminance only
+    grows along that path, so bisection finds the point.
+*/
+static COLORREF ShadeWithLuminance(COLORREF hue, float target) {
+    const float h[3] = {GetRValue(hue) / 255.0f, GetGValue(hue) / 255.0f,
+                        GetBValue(hue) / 255.0f};
+    float c[3];
+
+    auto at = [&](float t) {
+        for (int i = 0; i < 3; i++) {
+            c[i] = t <= 0.5f ? h[i] * t * 2.0f
+                             : h[i] + (1.0f - h[i]) * (t * 2.0f - 1.0f);
+        }
+    };
+
+    float lo = 0.0f;
+    float hi = 1.0f;
+
+    for (int step = 0; step < 32; step++) {
+        float mid = (lo + hi) / 2.0f;
+        at(mid);
+
+        if (LuminanceOf(c[0], c[1], c[2]) < target) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+
+    at((lo + hi) / 2.0f);
+
+    auto channel = [](float v) {
+        return ClampInt(static_cast<int>(v * 255.0f + 0.5f), 0, 255);
+    };
+
+    return RGB(channel(c[0]), channel(c[1]), channel(c[2]));
 }
 
 /*
@@ -694,10 +869,43 @@ static bool IsSaneChannel(float v) {
 }
 
 /*
+    Which of kInterfaceBlues `in` is, or -1, matched on 8-bit channels — the
+    precision dvaui's tables hold them in. Blue has to be the largest channel
+    first, which turns every other color away before the list is read.
+*/
+static int InterfaceBlueIndex(const DvaColorRGBA& in) {
+    if (!(in.b > in.r + 0.1f && in.b > in.g)) {
+        return -1;
+    }
+
+    auto channel = [](float v) {
+        return ClampInt(static_cast<int>(v * 255.0f + 0.5f), 0, 255);
+    };
+
+    COLORREF c = RGB(channel(in.r), channel(in.g), channel(in.b));
+
+    for (size_t i = 0; i < kInterfaceBlueCount; i++) {
+        if (kInterfaceBlues[i] == c) {
+            return static_cast<int>(i);
+        }
+    }
+
+    return -1;
+}
+
+static int HighlightIndex(const DvaColorRGBA& in) {
+    return g_settings.highlight ? InterfaceBlueIndex(in) : -1;
+}
+
+/*
     dvaui::drawbot::ColorRGBA is four floats in RGBA order, which is how Adobe's
     own ASLColorToDVAColorRGBA writes it. If a future Premiere changes the
     struct, the values read here stop looking like a color, and the original is
     returned rather than garbage painted.
+
+    Two kinds of color are converted: a dark neutral gray and, on a palette
+    with a highlight, one of Premiere's own blues. Every other saturated color
+    passes.
 */
 static bool ShouldConvert(const DvaColorRGBA& in) {
     if (!IsSaneChannel(in.r) || !IsSaneChannel(in.g) || !IsSaneChannel(in.b) ||
@@ -705,21 +913,47 @@ static bool ShouldConvert(const DvaColorRGBA& in) {
         return false;
     }
 
-    if (!IsNeutral(in.r, in.g, in.b, 0.035f)) {
-        return false;
+    if (IsNeutral(in.r, in.g, in.b, 0.035f)) {
+        return (in.r + in.g + in.b) / 3.0f <= g_settings.ceiling;
     }
 
-    return (in.r + in.g + in.b) / 3.0f <= g_settings.ceiling;
+    return HighlightIndex(in) >= 0;
 }
 
-static bool ConvertDvaColor(const DvaColorRGBA& in, DvaColorRGBA* out) {
+/*
+    The tone `in` becomes: a ramp stop for a gray, the highlight shade for a
+    blue. No side effects, so the stylesheet rewrite shares it.
+*/
+static bool PaletteTarget(const DvaColorRGBA& in, COLORREF* target, int* blue) {
     if (!ShouldConvert(in)) {
         return false;
     }
 
-    float brightness = (in.r + in.g + in.b) / 3.0f;
+    *blue = HighlightIndex(in);
+    *target = *blue >= 0 ? g_settings.highlightShades[*blue]
+                         : PickTarget((in.r + in.g + in.b) / 3.0f);
 
-    COLORREF target = PickTarget(brightness);
+    return true;
+}
+
+// One bit per kInterfaceBlues entry a hook recolored, logged at unload.
+volatile LONG64 g_bluesRecolored = 0;
+
+static bool ConvertDvaColor(const DvaColorRGBA& in, DvaColorRGBA* out) {
+    COLORREF target = 0;
+    int blue = -1;
+
+    if (!PaletteTarget(in, &target, &blue)) {
+        return false;
+    }
+
+    if (blue >= 0) {
+        LONG64 bit = LONG64{1} << blue;
+
+        if (!(g_bluesRecolored & bit)) {
+            InterlockedOr64(&g_bluesRecolored, bit);
+        }
+    }
 
     out->r = Blend(in.r, GetRValue(target) / 255.0f);
     out->g = Blend(in.g, GetGValue(target) / 255.0f);
@@ -1966,6 +2200,522 @@ HMODULE WINAPI LoadLibraryExW_Hook(LPCWSTR fileName, HANDLE file, DWORD flags) {
     }
 
     return module;
+}
+
+// ============================================================================
+// UXP PANELS: THE STYLESHEETS THEY READ
+// ============================================================================
+
+/*
+    The Text panel, Import, Export, Quick Export, Progress, Preset Manager and
+    the Home screen are UXP plugins shipped in Premiere's UXP\plugins folder.
+    They paint without dvaui, from stylesheets with the Spectrum grays written
+    into them, so none of the hooks above ever sees their colors.
+
+    What does reach them is the file. The UXP runtime reads each stylesheet
+    through CreateFileW or CreateFile2 when a panel loads, so that read is
+    answered with a copy whose colors went through the same decision as every
+    other color here. The copy is a temporary file Windows deletes when UXP
+    closes it, and each color is rewritten in as many characters as it had:
+    UXP also asks for a file's size by path, which a longer or shorter copy
+    would contradict.
+*/
+
+wchar_t g_uxpPluginsDir[MAX_PATH + 16] = {};  // folded, see FoldPathChar
+size_t g_uxpPluginsDirLength = 0;
+
+volatile LONG g_stylesheetSerial = 0;
+volatile LONG g_stylesheetFailureLogged = FALSE;
+
+// ASCII case and both separators; the rest of a path has to match exactly.
+static wchar_t FoldPathChar(wchar_t c) {
+    if (c == L'/') {
+        return L'\\';
+    }
+
+    if (c >= L'A' && c <= L'Z') {
+        return static_cast<wchar_t>(c - L'A' + L'a');
+    }
+
+    return c;
+}
+
+// <folder of the executable>\UXP\plugins\, where only Adobe's own plugins live.
+static void SetUxpPluginsDirFrom(const wchar_t* executablePath) {
+    g_uxpPluginsDirLength = 0;
+
+    const wchar_t* slash = wcsrchr(executablePath, L'\\');
+
+    if (!slash) {
+        return;
+    }
+
+    constexpr wchar_t kTail[] = L"UXP\\plugins\\";
+    size_t folder = static_cast<size_t>(slash - executablePath) + 1;
+    size_t tail = ARRAYSIZE(kTail) - 1;
+
+    if (folder + tail >= ARRAYSIZE(g_uxpPluginsDir)) {
+        return;
+    }
+
+    for (size_t i = 0; i < folder; i++) {
+        g_uxpPluginsDir[i] = FoldPathChar(executablePath[i]);
+    }
+
+    for (size_t i = 0; i < tail; i++) {
+        g_uxpPluginsDir[folder + i] = FoldPathChar(kTail[i]);
+    }
+
+    g_uxpPluginsDir[folder + tail] = L'\0';
+    g_uxpPluginsDirLength = folder + tail;
+}
+
+static void FindUxpPluginsDir() {
+    wchar_t path[MAX_PATH]{};
+    DWORD length = GetModuleFileNameW(nullptr, path, ARRAYSIZE(path));
+
+    if (length && length < ARRAYSIZE(path)) {
+        SetUxpPluginsDirFrom(path);
+    }
+}
+
+/*
+    A .css file under Premiere's own UXP\plugins folder. `relative` receives
+    the part after that folder, for the log.
+*/
+static bool IsBundledStylesheet(LPCWSTR path, LPCWSTR* relative) {
+    if (!path || !g_uxpPluginsDirLength) {
+        return false;
+    }
+
+    size_t length = wcslen(path);
+
+    if (length < 4 || _wcsicmp(path + length - 4, L".css") != 0) {
+        return false;
+    }
+
+    if (wcsncmp(path, L"\\\\?\\", 4) == 0) {
+        path += 4;
+        length -= 4;
+    }
+
+    if (length <= g_uxpPluginsDirLength) {
+        return false;
+    }
+
+    for (size_t i = 0; i < g_uxpPluginsDirLength; i++) {
+        if (FoldPathChar(path[i]) != g_uxpPluginsDir[i]) {
+            return false;
+        }
+    }
+
+    if (relative) {
+        *relative = path + g_uxpPluginsDirLength;
+    }
+
+    return true;
+}
+
+static int CssHexDigit(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+
+    return -1;
+}
+
+static bool IsCssWordChar(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+           (c >= 'A' && c <= 'Z') || c == '-' || c == '_';
+}
+
+// What an 8-bit stylesheet color becomes, in place; false leaves it as written.
+static bool RecolorCssChannels(int rgb[3]) {
+    DvaColorRGBA in{rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f};
+    COLORREF target = 0;
+    int blue = -1;
+
+    if (!PaletteTarget(in, &target, &blue)) {
+        return false;
+    }
+
+    auto channel = [](float original, BYTE wanted) {
+        float v = Blend(original, wanted / 255.0f) * 255.0f + 0.5f;
+        return ClampInt(static_cast<int>(v), 0, 255);
+    };
+
+    int out[3] = {channel(in.r, GetRValue(target)), channel(in.g, GetGValue(target)),
+                  channel(in.b, GetBValue(target))};
+
+    if (out[0] == rgb[0] && out[1] == rgb[1] && out[2] == rgb[2]) {
+        return false;
+    }
+
+    for (int k = 0; k < 3; k++) {
+        rgb[k] = out[k];
+    }
+
+    return true;
+}
+
+// #rrggbb and #rrggbbaa, alpha kept. #rgb has no room for most results.
+static bool RecolorCssHex(char* text, size_t size, size_t hash) {
+    size_t start = hash + 1;
+    size_t end = start;
+
+    while (end < size && CssHexDigit(text[end]) >= 0) {
+        end++;
+    }
+
+    size_t digits = end - start;
+
+    if ((digits != 6 && digits != 8) || (end < size && IsCssWordChar(text[end]))) {
+        return false;
+    }
+
+    int rgb[3];
+    bool upper = false;
+
+    for (int k = 0; k < 3; k++) {
+        char high = text[start + 2 * k];
+        char low = text[start + 2 * k + 1];
+
+        rgb[k] = CssHexDigit(high) * 16 + CssHexDigit(low);
+        upper = upper || (high >= 'A' && high <= 'F') || (low >= 'A' && low <= 'F');
+    }
+
+    if (!RecolorCssChannels(rgb)) {
+        return false;
+    }
+
+    const char* hex = upper ? "0123456789ABCDEF" : "0123456789abcdef";
+
+    for (int k = 0; k < 3; k++) {
+        text[start + 2 * k] = hex[rgb[k] >> 4];
+        text[start + 2 * k + 1] = hex[rgb[k] & 0xF];
+    }
+
+    return true;
+}
+
+static size_t WriteCssDecimal(char* out, int value) {
+    char reversed[3];
+    size_t count = 0;
+
+    do {
+        reversed[count++] = static_cast<char>('0' + value % 10);
+        value /= 10;
+    } while (value && count < 3);
+
+    for (size_t k = 0; k < count; k++) {
+        out[k] = reversed[count - 1 - k];
+    }
+
+    return count;
+}
+
+/*
+    "R,G,B" as a -rgb custom property or an rgb()/rgba() holds it. The new
+    digits are padded with spaces to the old length, and a color whose digits
+    would not fit keeps its own.
+*/
+static bool RecolorCssTriplet(char* text, size_t size, size_t from) {
+    size_t i = from;
+    size_t first = 0;
+    int rgb[3];
+
+    for (int k = 0; k < 3; k++) {
+        while (i < size && text[i] == ' ') {
+            i++;
+        }
+
+        if (k > 0) {
+            if (i >= size || text[i] != ',') {
+                return false;
+            }
+
+            i++;
+
+            while (i < size && text[i] == ' ') {
+                i++;
+            }
+        }
+
+        size_t start = i;
+        int value = 0;
+
+        while (i < size && text[i] >= '0' && text[i] <= '9' && i - start < 3) {
+            value = value * 10 + (text[i] - '0');
+            i++;
+        }
+
+        // Nothing there, too many digits, out of range, a percentage or a fraction.
+        if (i == start || value > 255 ||
+            (i < size && ((text[i] >= '0' && text[i] <= '9') || text[i] == '%' ||
+                          text[i] == '.'))) {
+            return false;
+        }
+
+        if (k == 0) {
+            first = start;
+        }
+
+        rgb[k] = value;
+    }
+
+    if (!RecolorCssChannels(rgb)) {
+        return false;
+    }
+
+    char written[12];
+    size_t length = 0;
+
+    for (int k = 0; k < 3; k++) {
+        if (k > 0) {
+            written[length++] = ',';
+        }
+
+        length += WriteCssDecimal(written + length, rgb[k]);
+    }
+
+    size_t span = i - first;
+
+    if (length > span) {
+        return false;
+    }
+
+    memcpy(text + first, written, length);
+    memset(text + first + length, ' ', span - length);
+
+    return true;
+}
+
+static bool CssPrecededBy(const char* text, size_t at, const char* word) {
+    size_t length = strlen(word);
+
+    return at >= length && _strnicmp(text + at - length, word, length) == 0;
+}
+
+/*
+    Rewrites every color a stylesheet spells out, in place and at its own
+    length, and returns how many changed. A value taken from a variable, like
+    rgb(var(--x)), changes where the variable is defined.
+*/
+static size_t RecolorStylesheet(char* text, size_t size) {
+    size_t changed = 0;
+
+    for (size_t i = 0; i < size; i++) {
+        bool recolored = false;
+
+        if (text[i] == '#') {
+            recolored = RecolorCssHex(text, size, i);
+        } else if (text[i] == ':' && CssPrecededBy(text, i, "-rgb")) {
+            recolored = RecolorCssTriplet(text, size, i + 1);
+        } else if (text[i] == '(' &&
+                   (CssPrecededBy(text, i, "rgb") || CssPrecededBy(text, i, "rgba"))) {
+            recolored = RecolorCssTriplet(text, size, i + 1);
+        }
+
+        changed += recolored ? 1 : 0;
+    }
+
+    return changed;
+}
+
+using CreateFileW_t = HANDLE(WINAPI*)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES,
+                                      DWORD, DWORD, HANDLE);
+using CreateFile2_t = HANDLE(WINAPI*)(LPCWSTR, DWORD, DWORD, DWORD,
+                                      LPCREATEFILE2_EXTENDED_PARAMETERS);
+
+CreateFileW_t CreateFileW_Original = nullptr;
+CreateFile2_t CreateFile2_Original = nullptr;
+
+// Far above any stylesheet Premiere ships.
+constexpr LONGLONG kMaxStylesheetBytes = 16LL << 20;
+
+// A read of a file that already exists: what a copy can stand in for.
+static bool IsPlainRead(DWORD access, DWORD disposition, DWORD flags) {
+    constexpr DWORD kWrite = GENERIC_WRITE | GENERIC_ALL | FILE_WRITE_DATA |
+                             FILE_APPEND_DATA | FILE_WRITE_EA |
+                             FILE_WRITE_ATTRIBUTES | DELETE | WRITE_DAC |
+                             WRITE_OWNER;
+    constexpr DWORD kUnusual = FILE_FLAG_NO_BUFFERING | FILE_FLAG_DELETE_ON_CLOSE |
+                               FILE_FLAG_OPEN_REPARSE_POINT;
+
+    return (access & (GENERIC_READ | FILE_READ_DATA)) && !(access & kWrite) &&
+           disposition == OPEN_EXISTING && !(flags & kUnusual);
+}
+
+static bool ReadWholeFile(LPCWSTR path, std::vector<char>* bytes) {
+    HANDLE file = CreateFileW_Original(
+        path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+    if (file == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    LARGE_INTEGER size{};
+    bool ok = GetFileSizeEx(file, &size) && size.QuadPart > 0 &&
+              size.QuadPart <= kMaxStylesheetBytes;
+
+    if (ok) {
+        bytes->resize(static_cast<size_t>(size.QuadPart));
+
+        DWORD read = 0;
+        ok = ReadFile(file, bytes->data(), static_cast<DWORD>(bytes->size()), &read,
+                      nullptr) &&
+             read == bytes->size();
+    }
+
+    CloseHandle(file);
+
+    return ok;
+}
+
+/*
+    A temporary file holding `bytes`, opened with the caller's
+    FILE_FLAG_OVERLAPPED and positioned at the start. Windows deletes it when
+    the handle closes, and also if Premiere exits without closing it.
+*/
+static HANDLE WriteTemporaryCopy(const std::vector<char>& bytes, DWORD callerFlags) {
+    wchar_t folder[MAX_PATH + 1]{};
+    DWORD length = GetTempPathW(ARRAYSIZE(folder), folder);
+
+    if (!length || length >= ARRAYSIZE(folder)) {
+        return INVALID_HANDLE_VALUE;
+    }
+
+    wchar_t name[1024]{};
+    wsprintfW(name, L"%spremiere-pro-theme-%lu-%ld.css", folder,
+              GetCurrentProcessId(), InterlockedIncrement(&g_stylesheetSerial));
+
+    bool overlapped = (callerFlags & FILE_FLAG_OVERLAPPED) != 0;
+
+    HANDLE copy = CreateFileW_Original(
+        name, GENERIC_READ | GENERIC_WRITE | DELETE, FILE_SHARE_READ | FILE_SHARE_DELETE,
+        nullptr, CREATE_ALWAYS,
+        FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE |
+            (overlapped ? FILE_FLAG_OVERLAPPED : 0),
+        nullptr);
+
+    if (copy == INVALID_HANDLE_VALUE) {
+        return copy;
+    }
+
+    auto size = static_cast<DWORD>(bytes.size());
+    DWORD written = 0;
+    bool ok = false;
+
+    if (overlapped) {
+        OVERLAPPED io{};
+        io.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+
+        ok = io.hEvent &&
+             (WriteFile(copy, bytes.data(), size, nullptr, &io) ||
+              GetLastError() == ERROR_IO_PENDING) &&
+             GetOverlappedResult(copy, &io, &written, TRUE);
+
+        if (io.hEvent) {
+            CloseHandle(io.hEvent);
+        }
+    } else {
+        LARGE_INTEGER start{};
+        ok = WriteFile(copy, bytes.data(), size, &written, nullptr) &&
+             SetFilePointerEx(copy, start, nullptr, FILE_BEGIN);
+    }
+
+    if (!ok || written != size) {
+        CloseHandle(copy);
+        return INVALID_HANDLE_VALUE;
+    }
+
+    return copy;
+}
+
+/*
+    The recolored copy of a bundled stylesheet, or INVALID_HANDLE_VALUE for
+    the caller to open the file itself: when there is nothing to recolor, and
+    when anything fails.
+*/
+static HANDLE OpenThemedStylesheet(LPCWSTR path, LPCWSTR relative, DWORD flags) {
+    std::vector<char> bytes;
+
+    if (!ReadWholeFile(path, &bytes)) {
+        return INVALID_HANDLE_VALUE;
+    }
+
+    size_t colors = RecolorStylesheet(bytes.data(), bytes.size());
+
+    if (!colors) {
+        return INVALID_HANDLE_VALUE;
+    }
+
+    HANDLE copy = WriteTemporaryCopy(bytes, flags);
+
+    if (copy == INVALID_HANDLE_VALUE) {
+        DWORD error = GetLastError();
+
+        if (Claim(&g_stylesheetFailureLogged)) {
+            Wh_Log(L"could not write a recolored stylesheet (%u); UXP panels "
+                   L"keep their own colors",
+                   error);
+        }
+
+        return INVALID_HANDLE_VALUE;
+    }
+
+    Wh_Log(L"UXP stylesheet recolored: %s, %u colors", relative,
+           static_cast<unsigned>(colors));
+
+    // A successful open of an existing file reports no error.
+    SetLastError(ERROR_SUCCESS);
+
+    return copy;
+}
+
+HANDLE WINAPI CreateFileW_Hook(LPCWSTR path, DWORD access, DWORD share,
+                               LPSECURITY_ATTRIBUTES security, DWORD disposition,
+                               DWORD flags, HANDLE templateFile) {
+    LPCWSTR relative = nullptr;
+
+    if (g_settings.uxpPanels && IsPlainRead(access, disposition, flags) &&
+        IsBundledStylesheet(path, &relative)) {
+        HANDLE copy = OpenThemedStylesheet(path, relative, flags);
+
+        if (copy != INVALID_HANDLE_VALUE) {
+            return copy;
+        }
+    }
+
+    return CreateFileW_Original(path, access, share, security, disposition, flags,
+                                templateFile);
+}
+
+HANDLE WINAPI CreateFile2_Hook(LPCWSTR path, DWORD access, DWORD share,
+                               DWORD disposition,
+                               LPCREATEFILE2_EXTENDED_PARAMETERS parameters) {
+    DWORD flags = parameters ? parameters->dwFileFlags : 0;
+    LPCWSTR relative = nullptr;
+
+    if (g_settings.uxpPanels && IsPlainRead(access, disposition, flags) &&
+        IsBundledStylesheet(path, &relative)) {
+        HANDLE copy = OpenThemedStylesheet(path, relative, flags);
+
+        if (copy != INVALID_HANDLE_VALUE) {
+            return copy;
+        }
+    }
+
+    return CreateFile2_Original(path, access, share, disposition, parameters);
 }
 
 // ============================================================================
@@ -3597,6 +4347,22 @@ struct NamedPalette {
     highlights a menu item instead of drowning its text. Glitch's acid green
     would be too bright as background, so it tints the black and tops the ramp.
     Comfy is designed for long sessions and stays away from black.
+
+    The later sets take the same rule further. Violet and Blossom put the hue in
+    the ramp; Amethyst and Crimson hold the same two hues out of it, so the
+    panels read near black and only the border and the accent are colored.
+    Blossom is pastel in its text and border rather than its background: the
+    conversion only darkens, and Premiere's own text passes through above the
+    ceiling, so a pastel background would be light text on a light panel. Ember,
+    Crimson and Blossom keep the panel's red channel low, because the monitors
+    make their surround gray out of it. Threshold is threshold-editor.com.br's
+    own #050505 / #FFFFFF / #DC2626.
+
+    Every accent is kept at 4.5:1 or better against its own text, measured the
+    WCAG way, because the hovered menu item draws that text straight onto it.
+
+    The seven from Contrast on also carry a highlight, the hue Premiere's blue
+    takes; LoadSettings turns it into one shade per interface blue.
 */
 static const NamedPalette kPalettes[] = {
     {L"onyx",
@@ -3647,6 +4413,62 @@ static const NamedPalette kPalettes[] = {
       RGB(0xE9, 0xF7, 0xC0),
       RGB(0x8F, 0xA4, 0x63),
       RGB(0xB8, 0x15, 0x7A)}},
+
+    {L"contrast",
+     {{RGB(0x00, 0x00, 0x00), RGB(0x06, 0x06, 0x06), RGB(0x10, 0x10, 0x10),
+       RGB(0x20, 0x20, 0x20), RGB(0x4A, 0x4A, 0x4A)},
+      RGB(0xFF, 0xFF, 0xFF),
+      RGB(0x9A, 0x9A, 0x9A),
+      RGB(0x5E, 0x5E, 0x5E),
+      RGB(0x80, 0x80, 0x80)}},
+
+    {L"violet",
+     {{RGB(0x0A, 0x04, 0x14), RGB(0x12, 0x08, 0x27), RGB(0x1C, 0x0C, 0x3B),
+       RGB(0x2A, 0x12, 0x57), RGB(0x4B, 0x20, 0x88)},
+      RGB(0xE2, 0xD4, 0xFA),
+      RGB(0x8E, 0x7A, 0xB4),
+      RGB(0x6D, 0x28, 0xD9),
+      RGB(0x6D, 0x28, 0xD9)}},
+
+    {L"blossom",
+     {{RGB(0x12, 0x0A, 0x0E), RGB(0x18, 0x0D, 0x13), RGB(0x24, 0x13, 0x20),
+       RGB(0x34, 0x1B, 0x2E), RGB(0x5A, 0x2C, 0x4A)},
+      RGB(0xFB, 0xDC, 0xE8),
+      RGB(0xA7, 0x80, 0x8F),
+      RGB(0x86, 0x41, 0x60),
+      RGB(0xD9, 0x6A, 0x9B)}},
+
+    {L"ember",
+     {{RGB(0x0C, 0x07, 0x03), RGB(0x14, 0x0B, 0x04), RGB(0x1F, 0x12, 0x06),
+       RGB(0x2E, 0x1A, 0x08), RGB(0x55, 0x30, 0x0C)},
+      RGB(0xFB, 0xE3, 0xC8),
+      RGB(0x94, 0x76, 0x5A),
+      RGB(0x94, 0x41, 0x08),
+      RGB(0xC2, 0x56, 0x0A)}},
+
+    {L"amethyst",
+     {{RGB(0x05, 0x05, 0x07), RGB(0x09, 0x09, 0x0D), RGB(0x0F, 0x0F, 0x16),
+       RGB(0x18, 0x18, 0x23), RGB(0x33, 0x25, 0x4F)},
+      RGB(0xE4, 0xDC, 0xF2),
+      RGB(0x7E, 0x76, 0x91),
+      RGB(0x67, 0x30, 0xC6),
+      RGB(0x7C, 0x3A, 0xED)}},
+
+    {L"crimson",
+     {{RGB(0x0D, 0x04, 0x05), RGB(0x15, 0x06, 0x09), RGB(0x20, 0x0A, 0x0E),
+       RGB(0x30, 0x0F, 0x15), RGB(0x59, 0x1A, 0x24)},
+      RGB(0xF7, 0xD9, 0xDD),
+      RGB(0x96, 0x67, 0x6D),
+      RGB(0xB9, 0x1C, 0x1C),
+      RGB(0xB9, 0x1C, 0x1C)}},
+
+    {L"threshold",
+     {{RGB(0x05, 0x05, 0x05), RGB(0x0A, 0x0A, 0x0A), RGB(0x12, 0x12, 0x12),
+       RGB(0x1C, 0x1C, 0x1C), RGB(0x2B, 0x2B, 0x2B)},
+      RGB(0xFF, 0xFF, 0xFF),
+      RGB(0x80, 0x80, 0x80),
+      RGB(0xDC, 0x26, 0x26),
+      RGB(0xDC, 0x26, 0x26)}},
 };
 
 static void LoadSettings() {
@@ -3701,6 +4523,16 @@ static void LoadSettings() {
     next.nativeDarkMode = Wh_GetIntSetting(L"nativeDarkMode") != 0;
     next.menuHook = Wh_GetIntSetting(L"menuHook") != 0;
     next.gdiHook = Wh_GetIntSetting(L"gdiHook") != 0;
+    next.uxpPanels = Wh_GetIntSetting(L"uxpPanels") != 0;
+    next.highlight =
+        p.highlight != CLR_INVALID && Wh_GetIntSetting(L"highlight") != 0;
+
+    if (next.highlight) {
+        for (size_t i = 0; i < kInterfaceBlueCount; i++) {
+            next.highlightShades[i] =
+                ShadeWithLuminance(p.highlight, Luminance(kInterfaceBlues[i]));
+        }
+    }
 
     g_settings = next;
 }
@@ -3820,6 +4652,18 @@ BOOL Wh_ModInit() {
                L"loads its UI modules after this point will not be themed");
     }
 
+    // The UXP runtime reads the panels' stylesheets through these two.
+    FindUxpPluginsDir();
+
+    if (kernelBase) {
+        HookOrLog(reinterpret_cast<CreateFileW_t>(
+                      GetProcAddress(kernelBase, "CreateFileW")),
+                  CreateFileW_Hook, &CreateFileW_Original, L"kernelbase!CreateFileW");
+        HookOrLog(reinterpret_cast<CreateFile2_t>(
+                      GetProcAddress(kernelBase, "CreateFile2")),
+                  CreateFile2_Hook, &CreateFile2_Original, L"kernelbase!CreateFile2");
+    }
+
     // Windhawk applies every operation registered here once this returns.
     HookLoadedModules();
 
@@ -3849,11 +4693,15 @@ void Wh_ModUninit() {
     StopWatchingModuleLoads();
 
     // Premiere's references into the table get their original colors back.
-    // The count is logged to judge the table size against real sessions.
+    // The counts are logged to judge the table size against real sessions,
+    // and to tell a highlight that reached the screen from one never asked for.
     size_t used = RecomputeColorTable(true);
 
-    Wh_Log(L"color table: %u of %u slots in use", static_cast<unsigned>(used),
-           static_cast<unsigned>(kSlotCount));
+    Wh_Log(L"color table: %u of %u slots in use; %d of %u interface blues "
+           L"recolored",
+           static_cast<unsigned>(used), static_cast<unsigned>(kSlotCount),
+           std::popcount(static_cast<uint64_t>(g_bluesRecolored)),
+           static_cast<unsigned>(kInterfaceBlueCount));
 
     RevertThemedWindows();
     ApplyAppMode(false);

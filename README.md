@@ -4,7 +4,9 @@ A [Windhawk](https://windhawk.net/) mod that recolors the whole Adobe Premiere
 Pro interface — panels, timeline, monitors, window frame and menu bar — far
 past what the Appearance brightness slider reaches.
 
-Seven palettes, three of them near-black and four tinted, plus a custom one.
+Fourteen palettes — four near-black, four tinted, four vivid and two that hold a
+strong accent over near-black panels — plus a custom one. The seven added in
+1.1 also give Premiere's blue their own hue.
 
 ## Screenshots
 
@@ -44,8 +46,8 @@ compile.
 
 ## What it does
 
-Premiere paints its interface through four different mechanisms, and the mod
-covers all four:
+Premiere paints its interface through five different mechanisms, and the mod
+covers all five:
 
 - **`dvaui.dll`** — Adobe's UI toolkit, which hands out the Spectrum gray ramp
   (`#1D1D1D`, `#262626`, `#303030`, `#4B4B4B`). Thirty-one color functions are
@@ -57,6 +59,8 @@ covers all four:
   whoever picked the color.
 - **Win32** — the title bar, the `File / Edit / Clip` menu bar and the dropdown
   menus, none of which any theme reaches.
+- **UXP** — the Text panel, Import, Export and the Home screen, drawn from
+  stylesheets of their own; the mod recolors each one as Premiere reads it.
 
 The full explanation of how each is found, what is deliberately left untouched,
 and why the palettes are the colors they are, is in the mod's own readme at the
@@ -80,10 +84,12 @@ work on any version. Native dark mode needs Windows 10 build 17763 or newer.
 
 ## Known limitations
 
-Two surfaces are not themed, and the mod says so rather than patching blind:
+Two surfaces are only partly covered, and the mod says so rather than patching
+blind:
 
-- **The Home screen**, which is rendered by UXP with its own CSS and hands out
-  no color at all.
+- **UXP panels follow a change after a restart.** The Text panel, Import,
+  Export and the Home screen read their stylesheets once, when they load, so a
+  palette switch, or disabling the mod, shows there after Premiere restarts.
 - **The band around the video in the monitors**, with a tinted palette. Zoomed
   out, the monitors paint the area around the picture a gray made from the red
   channel of the panel color, through a path none of the mod's hooks reaches.
