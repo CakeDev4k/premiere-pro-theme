@@ -460,6 +460,7 @@ static void TestKnownModules() {
     NoteKnownModules();
     CHECK(g_moduleRangeCount > before);
     CHECK(IsAdobeUICaller(reinterpret_cast<void*>(&TestKnownModules)));
+    CHECK(!IsAdobeUICaller(reinterpret_cast<void*>(0x10)));  // the cached hit is exact
 
     LONG after = g_moduleRangeCount;
     NoteKnownModules();
@@ -1319,7 +1320,59 @@ static void TestProducedIsRecentOnly() {
 
     CHECK(PaintFromBelow(&panel, &out));
 
+    // An entry past its lifetime no longer counts, with no paint root at all.
+    CHECK(PaintFromBelow(&header, &out));
+
+    for (ULONGLONG& at : g_recentProducedAt) {
+        at -= kRecentProducedMs + 1;
+    }
+
+    CHECK(PaintFromBelow(&panel, &out));
+
     ForgetRecentProduced();
+}
+
+static HTHEME g_exResult = nullptr;
+static LPCWSTR g_exClass = nullptr;
+
+static HTHEME WINAPI FakeOpenThemeDataEx(HWND, LPCWSTR themeClass, DWORD) {
+    g_exClass = themeClass;
+    return g_exResult;
+}
+
+static void TestOpenThemeDataEx() {
+    OpenThemeDataEx_Original = FakeOpenThemeDataEx;
+    HTHEME value = reinterpret_cast<HTHEME>(0x900);
+    g_exResult = value;
+
+    // "Menu" is swapped for the dark class and registered.
+    CHECK(OpenThemeDataEx_Hook(nullptr, L"Menu", 0) == value);
+    CHECK(g_exClass && wcscmp(g_exClass, L"DarkMode::Menu") == 0);
+    CHECK(IsMenuTheme(value));
+
+    // The same value handed back for another class is evicted.
+    CHECK(OpenThemeDataEx_Hook(nullptr, L"ScrollBar", 0) == value);
+    CHECK(!IsMenuTheme(value));
+
+    OpenThemeDataEx_Original = nullptr;
+}
+
+static void TestMessageOnlyWindows() {
+    CreateWindowExW_Original = CreateWindowExW;
+    g_themedWindows.clear();
+
+    HWND helper = CreateWindowExW_Hook(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                                       nullptr, nullptr, nullptr);
+    HWND popup = CreateWindowExW_Hook(0, L"STATIC", L"", WS_POPUP, 0, 0, 10, 10,
+                                      nullptr, nullptr, nullptr, nullptr);
+
+    CHECK(helper && g_themedWindows.count(helper) == 0);  // never shows
+    CHECK(popup && g_themedWindows.count(popup) == 1);
+
+    DestroyWindow(helper);
+    DestroyWindow(popup);
+    g_themedWindows.clear();
+    CreateWindowExW_Original = nullptr;
 }
 
 static void TestExplorerThemeClasses() {
@@ -1379,6 +1432,8 @@ int main() {
     TestStylesheetRedirect();
     TestProducedIsRecentOnly();
     TestExplorerThemeClasses();
+    TestOpenThemeDataEx();
+    TestMessageOnlyWindows();
     TestSlotSaturation();
 
     if (g_failures) {
