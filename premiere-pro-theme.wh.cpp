@@ -98,33 +98,22 @@ edge, the accent and the highlight:
 | Accent    | `#6730C6` | `#DC2626` |
 | Highlight | `#7537DF` | `#BC2020` |
 
-**Premiere** takes its violet from the app's own icon. **Neon** and **Glitch**
-come from reference artwork; in Glitch the acid green would be far too bright as
-background, so it tints the black and the magenta becomes the accent. **Comfy**
-is warm brown, lower in contrast and the lightest of the set, for long sessions.
+**Premiere** takes its violet from the app's icon; **Neon** and **Glitch** come
+from reference artwork, and **Comfy** is the lightest, for long sessions.
+**Contrast** keeps a `#4A4A4A` border so edges stay legible on black panels.
+**Blossom** is pastel in its text and border only: a pastel background would
+leave Premiere's own light text unreadable. **Threshold** is
+threshold-editor.com.br's `#050505`, `#FFFFFF` and `#DC2626`.
 
-**Contrast** is the widest neutral: black panels with a `#4A4A4A` border, so the
-dividers and edges stay as legible as Spectrum's while the surfaces go black.
-**Violet** and **Blossom** put the hue in the ramp; **Amethyst** and **Crimson**
-are the same two hues held out of the ramp instead, on near-black panels.
-**Blossom** is pastel in the text and the border rather than the background: the
-mod only darkens, and a pastel background would leave Premiere's own light text
-— which passes through untouched — unreadable on it. Every accent stays at
-least 4.5:1 against its own palette's text, so a hovered menu item reads. **Threshold** is the
-palette of threshold-editor.com.br, its `#050505`, `#FFFFFF` and `#DC2626` used
-as they are on the site.
+The accent stays out of the ramp, which is interpolated, so it only shows on
+hovered menu items and system highlights; each one is at least 4.5:1 against
+its palette's text.
 
-The accent is kept out of the ramp: the ramp is interpolated, and a strong color
-in it would tint half the interface. It only shows on hovered menu items and
-system highlights.
-
-Contrast, Violet, Blossom, Ember, Amethyst, Crimson and Threshold also carry a
-**highlight**: the hue Premiere's blue takes. Track targeting, the focused
-panel's border, the active tool, selections and links change hue, each blue at
-its own brightness, so white text on a blue button keeps the contrast it had.
-The tables give the track-targeting shade; Contrast's is the gray `#606060`. The
-other built-in palettes keep Adobe's blue, a custom theme can name a highlight of
-its own, and the **Palette highlight** setting keeps the blue on any palette.
+Contrast and the palettes with a **Highlight** row give Premiere's blue — track
+targeting, the focused panel's border, the active tool, selections, links —
+their own hue, each blue at its own brightness, so white text on a blue button
+keeps its contrast. The row is the track-targeting shade; Contrast's is the gray
+`#606060`. **Palette highlight** in the settings keeps the blue on any palette.
 
 ## Custom themes
 
@@ -159,17 +148,14 @@ shared as text and imported by pasting it into **Custom theme (JSON)**:
 | `highlight`      | optional | the hue Premiere's blue takes; the blue stays when left out     |
 | `name`, `author` | optional | written to the log                                              |
 
-Colors are `"#RRGGBB"`. An optional key can also be left empty, `""`, for its
-default, so `"highlight": ""` keeps Premiere's blue. The setting starts out with
-every key present and Onyx's colors, ready to edit. Keys the mod does not know
-are ignored, and so is whatever was copied around the braces — a code fence, a
-line of chat. A theme that is not valid JSON is not applied at all: Onyx stays,
-and the log says where the JSON stops making sense. A required color that is
-missing or unreadable falls back to Onyx's, and the log names it.
+Colors are `"#RRGGBB"`; an optional key left empty (`""`) takes its default, so
+`"highlight": ""` keeps Premiere's blue. The setting starts with every key and
+Onyx's colors. Unknown keys, and anything copied around the braces, are
+ignored. Invalid JSON is not applied — Onyx stays and the log says where it
+broke — and a missing required color falls back to Onyx's, logged by name.
 
-Keep the five steps dark and in order, darkest first: Premiere's own text is
-light and is not recolored, so a light background leaves it unreadable. The
-tables above are a good place to start from.
+Keep the five steps dark and in order: Premiere's own text is light and is not
+recolored.
 
 ## What it changes, and what it leaves alone
 
@@ -190,13 +176,11 @@ Each layer has its own switch in the settings:
   highlight.
 
 Saturated colors — clips, labels, warnings, and Premiere's blue unless the
-palette carries a highlight — pass through untouched, and so does anything
-above the **brightness ceiling**: text, icons,
-and the `#4B4B4B` Spectrum uses for disabled text. Colors that are content
-rather than interface are left alone whatever they are: the color picker's
-swatches, marker colors, Essential Graphics, and the parameter colors Effect
-Controls, Lumetri and the monitors draw. A dark gray you pick shows as that
-gray.
+palette carries a highlight — pass through, and so does anything above the
+**brightness ceiling**: text, icons, and the `#4B4B4B` of disabled text.
+Content is left alone whatever its color: the color picker's swatches, markers,
+Essential Graphics, and the parameter colors of Effect Controls, Lumetri and the
+monitors.
 
 ## If something becomes unreadable
 
@@ -221,24 +205,18 @@ mod's process **exclusion** list and this one takes over.
 
 ## Known limitations
 
-**UXP panels follow a change after a restart.** The Text panel, Import, Export,
-Quick Export, Progress, Preset Manager and the Home screen are UXP plugins,
-drawn from stylesheets with the Spectrum grays written into them rather than
-from the theme. The mod answers Premiere's read of each stylesheet with a
-recolored copy, deleted as soon as Premiere closes it, so these panels follow
-the palette — but Premiere reads them once, when a panel first loads. A palette
-switch, or disabling the mod, shows there after Premiere restarts. Frame.io and
-Adobe Stock keep their own look: their stylesheets carry no Spectrum grays.
+**UXP panels change on restart.** Premiere reads their stylesheets once, when a
+panel loads, and the mod recolors that read — a temporary copy, deleted as soon
+as it is closed; nothing on disk changes. So a palette switch, or disabling the
+mod, shows on those panels after Premiere restarts. Frame.io and Adobe Stock
+carry no Spectrum grays and keep their own look.
 
 **The band around the video, with a tinted palette.** Zoomed out, the monitors
-paint the area around the picture a gray taken from the red channel of the
-panel color, and keep it until Premiere restarts. On the neutral palettes —
-Onyx, Abyss, Graphite, Contrast and Threshold — it matches the panels; with a
-hue it shows as a neutral band — Glitch panels `#101907` give `#101010`. The
-warm palettes are drawn around this: red is the widest channel in Ember,
-Crimson and Blossom, so their panels keep it low and carry the color in the
-border and the accent, which the band does not read. Where it is painted has
-not been found, so the mod leaves it as it is rather than patch blind.
+paint the area around the picture a gray made from the red channel of the panel
+color, cached until Premiere restarts. On the neutral palettes it matches the
+panels; with a hue it shows as a neutral band (Glitch's `#101907` gives
+`#101010`), which is why the warm palettes keep their panels' red low. Its
+painter has not been found, so the mod leaves it alone rather than patch blind.
 
 The black *inside* the sequence frame is the rendered picture, not chrome, and
 stays black in every palette.
@@ -332,8 +310,8 @@ This mod is MIT as well.
   $description: >-
     The Text panel, Import, Export, Quick Export, Progress, Preset Manager and
     the Home screen, which Premiere draws from stylesheets of their own. Those
-    are read when a panel loads, so this switch and a palette change show there
-    after Premiere restarts.
+    are read once, when a panel loads, so this switch, a palette change and
+    disabling the mod all show there after Premiere restarts.
 - highlight: true
   $name: Palette highlight
   $description: >-
@@ -352,6 +330,7 @@ This mod is MIT as well.
 
 #include <stdint.h>
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstring>
@@ -435,7 +414,21 @@ struct Settings {
     COLORREF highlightShades[kInterfaceBlueCount];
 };
 
-Settings g_settings;
+/*
+    Published whole. LoadSettings fills the next of these copies and swaps the
+    pointer, so a hook reads one complete set, never half of two. A hook holds
+    its set for one call; its copy is only reused after kSettingsCopies more
+    settings changes, each of which also repaints the process.
+*/
+constexpr size_t kSettingsCopies = 16;
+
+Settings g_settingsCopies[kSettingsCopies];
+std::atomic<const Settings*> g_currentSettings{&g_settingsCopies[0]};
+size_t g_nextSettingsCopy = 1;  // LoadSettings only
+
+static const Settings& CurrentSettings() {
+    return *g_currentSettings.load(std::memory_order_acquire);
+}
 
 // ============================================================================
 // HELPERS
@@ -450,7 +443,8 @@ static int ClampInt(int v, int lo, int hi) {
 }
 
 static float Blend(float original, float target) {
-    return original * (1.0f - g_settings.strength) + target * g_settings.strength;
+    float strength = CurrentSettings().strength;
+    return original * (1.0f - strength) + target * strength;
 }
 
 // WCAG relative luminance: the measure a contrast ratio is built on.
@@ -852,10 +846,10 @@ static bool IsAdobeUICaller(void* caller) {
     neighboring steps into one tone. Whatever was one step lighter stays one
     step lighter, inside a much darker range.
 */
-static COLORREF PickTarget(float brightness) {
-    const COLORREF* ramp = g_settings.palette.ramp;
+static COLORREF PickTarget(const Settings& s, float brightness) {
+    const COLORREF* ramp = s.palette.ramp;
 
-    float t = ClampFloat(brightness / g_settings.ceiling, 0.0f, 1.0f);
+    float t = ClampFloat(brightness / s.ceiling, 0.0f, 1.0f);
 
     float pos = t * 4.0f;  // five stops -> four intervals
 
@@ -931,8 +925,8 @@ static int InterfaceBlueIndex(const DvaColorRGBA& in) {
     return -1;
 }
 
-static int HighlightIndex(const DvaColorRGBA& in) {
-    return g_settings.highlight ? InterfaceBlueIndex(in) : -1;
+static int HighlightIndex(const Settings& s, const DvaColorRGBA& in) {
+    return s.highlight ? InterfaceBlueIndex(in) : -1;
 }
 
 /*
@@ -945,31 +939,39 @@ static int HighlightIndex(const DvaColorRGBA& in) {
     with a highlight, one of Premiere's own blues. Every other saturated color
     passes.
 */
-static bool ShouldConvert(const DvaColorRGBA& in) {
+static bool ShouldConvertWith(const Settings& s, const DvaColorRGBA& in) {
     if (!IsSaneChannel(in.r) || !IsSaneChannel(in.g) || !IsSaneChannel(in.b) ||
         !IsSaneChannel(in.a)) {
         return false;
     }
 
     if (IsNeutral(in.r, in.g, in.b, 0.035f)) {
-        return (in.r + in.g + in.b) / 3.0f <= g_settings.ceiling;
+        return (in.r + in.g + in.b) / 3.0f <= s.ceiling;
     }
 
-    return HighlightIndex(in) >= 0;
+    return HighlightIndex(s, in) >= 0;
+}
+
+static bool ShouldConvert(const DvaColorRGBA& in) {
+    return ShouldConvertWith(CurrentSettings(), in);
 }
 
 /*
     The tone `in` becomes: a ramp stop for a gray, the highlight shade for a
-    blue. No side effects, so the stylesheet rewrite shares it.
+    blue. One settings snapshot for the whole decision, so a palette change
+    cannot pair one palette's test with another's shades. No side effects, so
+    the stylesheet rewrite shares it.
 */
 static bool PaletteTarget(const DvaColorRGBA& in, COLORREF* target, int* blue) {
-    if (!ShouldConvert(in)) {
+    const Settings& s = CurrentSettings();
+
+    if (!ShouldConvertWith(s, in)) {
         return false;
     }
 
-    *blue = HighlightIndex(in);
-    *target = *blue >= 0 ? g_settings.highlightShades[*blue]
-                         : PickTarget((in.r + in.g + in.b) / 3.0f);
+    *blue = HighlightIndex(s, in);
+    *target = *blue >= 0 ? s.highlightShades[*blue]
+                         : PickTarget(s, (in.r + in.g + in.b) / 3.0f);
 
     return true;
 }
@@ -1127,7 +1129,7 @@ static void RefreshSlot(ColorSlot& slot, LONG generation, bool restoreOriginals)
     // ConvertDvaColor leaves dst untouched when it declines.
     DvaColorRGBA dst = slot.src;
 
-    if (!restoreOriginals && g_settings.dvauiHook &&
+    if (!restoreOriginals && CurrentSettings().dvauiHook &&
         ConvertDvaColor(slot.src, &dst)) {
         RememberProduced(dst);
     }
@@ -1296,7 +1298,7 @@ static const DvaColorRGBA* ConvertColorRef(const DvaColorRGBA* original) {
     // Read before the settings are, so a change in between is caught as stale.
     LONG generation = g_generation;
 
-    if (!original || !g_settings.dvauiHook || IsOurSlot(original)) {
+    if (!original || !CurrentSettings().dvauiHook || IsOurSlot(original)) {
         return original;
     }
 
@@ -1686,7 +1688,7 @@ static bool InContentScope() {
 
 // A content scope only changes what the brush and GDI layers do.
 static bool ContentScopesMatter() {
-    return g_settings.brushHook || g_settings.gdiHook;
+    return CurrentSettings().brushHook || CurrentSettings().gdiHook;
 }
 
 /*
@@ -1694,7 +1696,7 @@ static bool ContentScopesMatter() {
     and float comparisons turn them away before the hash lookup.
 */
 static bool ConvertForPaint(const DvaColorRGBA* in, DvaColorRGBA* out) {
-    if (!g_settings.brushHook || !in || InContentScope()) {
+    if (!CurrentSettings().brushHook || !in || InContentScope()) {
         return false;
     }
 
@@ -2157,7 +2159,7 @@ volatile LONG g_uifHooked = FALSE;
     Premiere if an update ever breaks one of these hooks.
 */
 static bool WantsPremiereHooks() {
-    return g_settings.dvauiHook || g_settings.brushHook || g_settings.gdiHook;
+    return CurrentSettings().dvauiHook || CurrentSettings().brushHook || CurrentSettings().gdiHook;
 }
 
 static bool HookLoadedModules() {
@@ -2246,17 +2248,11 @@ HMODULE WINAPI LoadLibraryExW_Hook(LPCWSTR fileName, HANDLE file, DWORD flags) {
 
 /*
     The Text panel, Import, Export, Quick Export, Progress, Preset Manager and
-    the Home screen are UXP plugins shipped in Premiere's UXP\plugins folder.
-    They paint without dvaui, from stylesheets with the Spectrum grays written
-    into them, so none of the hooks above ever sees their colors.
-
-    What does reach them is the file. The UXP runtime reads each stylesheet
-    through CreateFileW or CreateFile2 when a panel loads, so that read is
-    answered with a copy whose colors went through the same decision as every
-    other color here. The copy is a temporary file Windows deletes when UXP
-    closes it, and each color is rewritten in as many characters as it had:
-    UXP also asks for a file's size by path, which a longer or shorter copy
-    would contradict.
+    the Home screen are UXP plugins that paint without dvaui, from stylesheets
+    with the Spectrum grays written into them. What reaches them is the file:
+    a read of one of those stylesheets is answered with a recolored copy, a
+    temporary file deleted on close. Every color keeps its length, because the
+    UXP runtime also asks for a file's size by path.
 */
 
 wchar_t g_uxpPluginsDir[MAX_PATH + 16] = {};  // folded, see FoldPathChar
@@ -2264,6 +2260,7 @@ size_t g_uxpPluginsDirLength = 0;
 
 volatile LONG g_stylesheetSerial = 0;
 volatile LONG g_stylesheetFailureLogged = FALSE;
+volatile LONG g_stylesheetsRecolored = 0;  // logged at unload
 
 // ASCII case and both separators; the rest of a path has to match exactly.
 static wchar_t FoldPathChar(wchar_t c) {
@@ -2345,6 +2342,11 @@ static bool IsBundledStylesheet(LPCWSTR path, LPCWSTR* relative) {
         if (FoldPathChar(path[i]) != g_uxpPluginsDir[i]) {
             return false;
         }
+    }
+
+    // A path that climbs back out of the folder is not one of its stylesheets.
+    if (wcsstr(path + g_uxpPluginsDirLength, L"..")) {
+        return false;
     }
 
     if (relative) {
@@ -2761,6 +2763,7 @@ static HANDLE OpenThemedStylesheet(LPCWSTR path, LPCWSTR relative, DWORD flags) 
         return INVALID_HANDLE_VALUE;
     }
 
+    InterlockedIncrement(&g_stylesheetsRecolored);
     Wh_Log(L"UXP stylesheet recolored: %s, %u colors", relative,
            static_cast<unsigned>(colors));
 
@@ -2775,7 +2778,7 @@ HANDLE WINAPI CreateFileW_Hook(LPCWSTR path, DWORD access, DWORD share,
                                DWORD flags, HANDLE templateFile) {
     LPCWSTR relative = nullptr;
 
-    if (g_settings.uxpPanels && IsPlainRead(access, disposition, flags) &&
+    if (CurrentSettings().uxpPanels && IsPlainRead(access, disposition, flags) &&
         IsBundledStylesheet(path, &relative)) {
         HANDLE copy = OpenThemedStylesheet(path, relative, flags);
 
@@ -2794,7 +2797,7 @@ HANDLE WINAPI CreateFile2_Hook(LPCWSTR path, DWORD access, DWORD share,
     DWORD flags = parameters ? parameters->dwFileFlags : 0;
     LPCWSTR relative = nullptr;
 
-    if (g_settings.uxpPanels && IsPlainRead(access, disposition, flags) &&
+    if (CurrentSettings().uxpPanels && IsPlainRead(access, disposition, flags) &&
         IsBundledStylesheet(path, &relative)) {
         HANDLE copy = OpenThemedStylesheet(path, relative, flags);
 
@@ -2958,7 +2961,7 @@ static void InitNativeDarkMode() {
         scrollbars, common dialogs, control themes — belongs to "Window and
         system dialogs" and answers to it.
     */
-    ApplyAppMode(g_settings.nativeDarkMode);
+    ApplyAppMode(CurrentSettings().nativeDarkMode);
 }
 
 /*
@@ -3049,7 +3052,7 @@ static void SetFrameColors(HWND hwnd, COLORREF border, COLORREF caption,
 }
 
 static void ApplyDarkModeToWindow(HWND hwnd) {
-    if (!hwnd || !g_settings.nativeDarkMode) {
+    if (!hwnd || !CurrentSettings().nativeDarkMode) {
         return;
     }
 
@@ -3076,7 +3079,7 @@ static void ApplyDarkModeToWindow(HWND hwnd) {
                               static_cast<DWMWINDOWATTRIBUTE>(ImmersiveDarkModeAttribute()),
                               &dark, sizeof(dark));
 
-        const Palette& p = g_settings.palette;
+        const Palette& p = CurrentSettings().palette;
         SetFrameColors(hwnd, p.ramp[4], p.ramp[1], p.text);
 
         applied |= kThemedFrame;
@@ -3158,7 +3161,7 @@ static void RecolorThemedFrames() {
     std::unordered_map<HWND, BYTE> windows = g_themedWindows;
     ReleaseSRWLockShared(&g_themedLock);
 
-    const Palette& p = g_settings.palette;
+    const Palette& p = CurrentSettings().palette;
 
     for (const auto& [hwnd, applied] : windows) {
         if ((applied & kThemedFrame) && IsOwnWindow(hwnd)) {
@@ -3300,7 +3303,7 @@ volatile LONG g_sysBrushesFullLogged = FALSE;
 SRWLOCK g_brushLock = SRWLOCK_INIT;
 
 static bool MapSysColor(int index, COLORREF* out) {
-    const Palette& p = g_settings.palette;
+    const Palette& p = CurrentSettings().palette;
 
     switch (index) {
         case COLOR_WINDOW:
@@ -3359,7 +3362,7 @@ FillRect_t FillRect_Original = nullptr;
 DWORD WINAPI GetSysColor_Hook(int index) {
     COLORREF mapped;
 
-    if (g_settings.nativeDarkMode && MapSysColor(index, &mapped)) {
+    if (CurrentSettings().nativeDarkMode && MapSysColor(index, &mapped)) {
         return mapped;
     }
 
@@ -3421,7 +3424,7 @@ static HBRUSH ThemeSysBrush(int index) {
 }
 
 HBRUSH WINAPI GetSysColorBrush_Hook(int index) {
-    if (g_settings.nativeDarkMode) {
+    if (CurrentSettings().nativeDarkMode) {
         HBRUSH brush = ThemeSysBrush(index);
 
         if (brush) {
@@ -3441,7 +3444,7 @@ HBRUSH WINAPI GetSysColorBrush_Hook(int index) {
 int WINAPI FillRect_Hook(HDC hdc, const RECT* rect, HBRUSH brush) {
     ULONG_PTR raw = reinterpret_cast<ULONG_PTR>(brush);
 
-    if (g_settings.nativeDarkMode && raw >= 1 &&
+    if (CurrentSettings().nativeDarkMode && raw >= 1 &&
         raw <= static_cast<ULONG_PTR>(COLOR_MENUBAR) + 1) {
         HBRUSH replacement = ThemeSysBrush(static_cast<int>(raw) - 1);
 
@@ -3591,7 +3594,7 @@ DrawThemeTextEx_t DrawThemeTextEx_Original = nullptr;
 */
 static HTHEME OpenDarkMenuTheme(HWND hwnd, LPCWSTR classList,
                                 OpenNcThemeData_t opener) {
-    if (!g_settings.menuHook || !classList || !opener) {
+    if (!CurrentSettings().menuHook || !classList || !opener) {
         return nullptr;
     }
 
@@ -3650,7 +3653,7 @@ HTHEME WINAPI OpenThemeData_Hook(HWND hwnd, LPCWSTR classList) {
 }
 
 HTHEME WINAPI OpenThemeDataForDpi_Hook(HWND hwnd, LPCWSTR classList, UINT dpi) {
-    if (g_settings.menuHook && classList && _wcsicmp(classList, L"Menu") == 0) {
+    if (CurrentSettings().menuHook && classList && _wcsicmp(classList, L"Menu") == 0) {
         HTHEME dark =
             OpenThemeDataForDpi_Original(hwnd, L"DarkMode::Menu", dpi);
 
@@ -3696,7 +3699,7 @@ static void FillWith(HDC hdc, const RECT* rect, COLORREF color) {
 }
 
 static bool PaintMenuPart(HDC hdc, int part, int state, const RECT* rect) {
-    const Palette& p = g_settings.palette;
+    const Palette& p = CurrentSettings().palette;
 
     switch (part) {
         case kMenuBarBackground:
@@ -3748,7 +3751,7 @@ static bool PaintMenuPart(HDC hdc, int part, int state, const RECT* rect) {
 
 HRESULT WINAPI DrawThemeBackground_Hook(HTHEME theme, HDC hdc, int part, int state,
                                         const RECT* rect, const RECT* clip) {
-    if (g_settings.menuHook && rect && IsMenuTheme(theme) &&
+    if (CurrentSettings().menuHook && rect && IsMenuTheme(theme) &&
         PaintMenuPart(hdc, part, state, rect)) {
         return S_OK;
     }
@@ -3759,7 +3762,7 @@ HRESULT WINAPI DrawThemeBackground_Hook(HTHEME theme, HDC hdc, int part, int sta
 HRESULT WINAPI DrawThemeBackgroundEx_Hook(HTHEME theme, HDC hdc, int part,
                                           int state, const RECT* rect,
                                           const void* options) {
-    if (g_settings.menuHook && rect && IsMenuTheme(theme) &&
+    if (CurrentSettings().menuHook && rect && IsMenuTheme(theme) &&
         PaintMenuPart(hdc, part, state, rect)) {
         return S_OK;
     }
@@ -3794,7 +3797,7 @@ struct ThemeDttOpts {
 constexpr DWORD kDttTextColor = 0x00000001;
 
 static COLORREF MenuTextColor(int part, int state) {
-    const Palette& p = g_settings.palette;
+    const Palette& p = CurrentSettings().palette;
 
     if (part == kMenuPopupItem) {
         // 3 = disabled, 4 = disabled hot
@@ -3812,7 +3815,7 @@ static COLORREF MenuTextColor(int part, int state) {
 HRESULT WINAPI DrawThemeText_Hook(HTHEME theme, HDC hdc, int part, int state,
                                   LPCWSTR text, int length, DWORD flags,
                                   DWORD flags2, const RECT* rect) {
-    if (g_settings.menuHook && rect && DrawThemeTextEx_Original &&
+    if (CurrentSettings().menuHook && rect && DrawThemeTextEx_Original &&
         IsMenuTheme(theme)) {
         ThemeDttOpts opts{};
         opts.dwSize = sizeof(opts);
@@ -3832,7 +3835,7 @@ HRESULT WINAPI DrawThemeText_Hook(HTHEME theme, HDC hdc, int part, int state,
 HRESULT WINAPI DrawThemeTextEx_Hook(HTHEME theme, HDC hdc, int part, int state,
                                     LPCWSTR text, int length, DWORD flags,
                                     RECT* rect, const void* options) {
-    if (g_settings.menuHook && IsMenuTheme(theme)) {
+    if (CurrentSettings().menuHook && IsMenuTheme(theme)) {
         ThemeDttOpts opts{};
 
         if (options) {
@@ -4021,7 +4024,7 @@ static void PaintMenuBarBottomLine(HWND hwnd) {
     HDC hdc = GetWindowDC(hwnd);
 
     if (hdc) {
-        FillWith(hdc, &line, g_settings.palette.ramp[4]);
+        FillWith(hdc, &line, CurrentSettings().palette.ramp[4]);
         ReleaseDC(hwnd, hdc);
     }
 }
@@ -4053,7 +4056,7 @@ static bool PaintMenuBarBackground(HWND hwnd, LPARAM lParam) {
         return false;
     }
 
-    FillWith(info->hdc, &bar, g_settings.palette.ramp[1]);
+    FillWith(info->hdc, &bar, CurrentSettings().palette.ramp[1]);
 
     return true;
 }
@@ -4098,7 +4101,7 @@ static bool PaintMenuBarItem(HWND hwnd, LPARAM lParam) {
         }
     }
 
-    const Palette& p = g_settings.palette;
+    const Palette& p = CurrentSettings().palette;
 
     UINT state = draw->dis.itemState;
 
@@ -4192,7 +4195,7 @@ static bool IsMenuBarMessage(UINT msg) {
     would pass.
 */
 static bool NeedsMenuBarWork(HWND hwnd, UINT msg) {
-    return g_settings.menuHook && IsMenuBarMessage(msg) && hwnd &&
+    return CurrentSettings().menuHook && IsMenuBarMessage(msg) && hwnd &&
            !(GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CHILD) &&
            GetMenu(hwnd) != nullptr;
 }
@@ -4334,7 +4337,7 @@ static COLORREF ConvertGdiColor(COLORREF color) {
     here, it would be the hook's own address unless this was inlined.
 */
 static bool ShouldConvertGdi(COLORREF color, void* caller) {
-    return g_settings.gdiHook && ShouldConvert(GdiToDva(color)) &&
+    return CurrentSettings().gdiHook && ShouldConvert(GdiToDva(color)) &&
            !InContentScope() && IsAdobeUICaller(caller);
 }
 
@@ -4424,21 +4427,13 @@ struct NamedPalette {
     would be too bright as background, so it tints the black and tops the ramp.
     Comfy is designed for long sessions and stays away from black.
 
-    The later sets take the same rule further. Violet and Blossom put the hue in
-    the ramp; Amethyst and Crimson hold the same two hues out of it, so the
-    panels read near black and only the border and the accent are colored.
-    Blossom is pastel in its text and border rather than its background: the
-    conversion only darkens, and Premiere's own text passes through above the
-    ceiling, so a pastel background would be light text on a light panel. Ember,
-    Crimson and Blossom keep the panel's red channel low, because the monitors
-    make their surround gray out of it. Threshold is threshold-editor.com.br's
-    own #050505 / #FFFFFF / #DC2626.
-
-    Every accent is kept at 4.5:1 or better against its own text, measured the
-    WCAG way, because the hovered menu item draws that text straight onto it.
-
-    The seven from Contrast on also carry a highlight, the hue Premiere's blue
-    takes; LoadSettings turns it into one shade per interface blue.
+    Violet and Blossom put the hue in the ramp; Amethyst and Crimson hold it
+    out, on near-black panels. Blossom is pastel only in its text and border:
+    Premiere's own text passes above the ceiling, so a pastel background would
+    be light on light. The warm palettes keep the panel's red channel low for
+    the monitor surround, and every accent is at least 4.5:1 against its text.
+    Contrast through Threshold also carry a highlight, the hue Premiere's blue
+    takes; Threshold is threshold-editor.com.br's #050505 / #FFFFFF / #DC2626.
 */
 static const NamedPalette kPalettes[] = {
     {L"onyx",
@@ -4548,20 +4543,11 @@ static const NamedPalette kPalettes[] = {
 };
 
 /*
-    A custom theme is one JSON object in a single setting, so a theme can be
-    shared as text and imported by pasting it:
-
-        {"name": "Midnight", "author": "someone",
-         "base": "#05060A", "panel": "#0A0C14", "surface": "#10131F",
-         "raised": "#181C2C", "border": "#2A3048", "text": "#E6E9F5",
-         "accent": "#3A4270", "highlight": "#4F7BFF"}
-
-    The text comes from whoever shared it, so it is read strictly and within
-    fixed bounds: JSON that does not parse is rejected whole, never half
-    applied. Only what surrounds the object is forgiven — anything before its
-    first brace or after its last, like a code fence or a line of chat copied
-    along with it. Members the mod does not know are skipped however they are
-    nested, so a theme written for a later version still loads.
+    A custom theme is one JSON object in a single setting, so it can be shared
+    as text; the readme lists the keys. The text comes from other people, so it
+    is read strictly and within fixed bounds: JSON that does not parse is
+    rejected whole. Anything before the first brace or after the object, like a
+    code fence, is ignored, and unknown members are skipped however nested.
 */
 constexpr size_t kMaxThemeLength = 16384;
 constexpr size_t kMaxThemeMembers = 64;
@@ -5019,12 +5005,7 @@ static void LoadSettings() {
         }
     }
 
-    /*
-        Built in a local and published with a single assignment. Hooks on other
-        threads read g_settings without a lock while a settings change runs, and
-        filling it field by field would widen the window in which one of them
-        sees half the old settings and half the new.
-    */
+    // Built in a local, then published whole; see g_currentSettings.
     Settings next{};
 
     next.palette = p;
@@ -5049,7 +5030,10 @@ static void LoadSettings() {
         }
     }
 
-    g_settings = next;
+    Settings& copy = g_settingsCopies[g_nextSettingsCopy];
+    copy = next;
+    g_currentSettings.store(&copy, std::memory_order_release);
+    g_nextSettingsCopy = (g_nextSettingsCopy + 1) % kSettingsCopies;
 }
 
 // ============================================================================
@@ -5218,6 +5202,13 @@ void Wh_ModUninit() {
            std::popcount(static_cast<uint64_t>(g_bluesRecolored)),
            static_cast<unsigned>(kInterfaceBlueCount));
 
+    // Nothing to hand back there: Premiere parsed those stylesheets already.
+    if (g_stylesheetsRecolored) {
+        Wh_Log(L"%ld UXP stylesheets were recolored this session; those panels "
+               L"keep the palette until Premiere restarts",
+               g_stylesheetsRecolored);
+    }
+
     RevertThemedWindows();
     ApplyAppMode(false);
 
@@ -5226,7 +5217,7 @@ void Wh_ModUninit() {
         theme cached in user32 until it is flushed. If the setting was switched
         off earlier, that change already flushed it.
     */
-    if (g_settings.menuHook && g_FlushMenuThemes) {
+    if (CurrentSettings().menuHook && g_FlushMenuThemes) {
         g_FlushMenuThemes();
     }
 
@@ -5254,7 +5245,7 @@ void Wh_ModUninit() {
     so the new colors show.
 */
 void Wh_ModSettingsChanged() {
-    Settings previous = g_settings;
+    Settings previous = CurrentSettings();
 
     LoadSettings();
     InterlockedIncrement(&g_generation);
@@ -5266,20 +5257,20 @@ void Wh_ModSettingsChanged() {
 
     RecomputeColorTable(false);
 
-    ApplyAppMode(g_settings.nativeDarkMode);
+    ApplyAppMode(CurrentSettings().nativeDarkMode);
 
-    if (previous.nativeDarkMode && !g_settings.nativeDarkMode) {
+    if (previous.nativeDarkMode && !CurrentSettings().nativeDarkMode) {
         RevertThemedWindows();
-    } else if (!previous.nativeDarkMode && g_settings.nativeDarkMode) {
+    } else if (!previous.nativeDarkMode && CurrentSettings().nativeDarkMode) {
         ApplyThemeToExistingWindows();
-    } else if (g_settings.nativeDarkMode &&
-               memcmp(&previous.palette, &g_settings.palette, sizeof(Palette)) !=
+    } else if (CurrentSettings().nativeDarkMode &&
+               memcmp(&previous.palette, &CurrentSettings().palette, sizeof(Palette)) !=
                    0) {
         RecolorThemedFrames();
     }
 
     // ApplyAppMode flushes these itself when the mode changes.
-    if (previous.menuHook != g_settings.menuHook && g_FlushMenuThemes) {
+    if (previous.menuHook != CurrentSettings().menuHook && g_FlushMenuThemes) {
         g_FlushMenuThemes();
     }
 
