@@ -123,8 +123,51 @@ Contrast, Violet, Blossom, Ember, Amethyst, Crimson and Threshold also carry a
 panel's border, the active tool, selections and links change hue, each blue at
 its own brightness, so white text on a blue button keeps the contrast it had.
 The tables give the track-targeting shade; Contrast's is the gray `#606060`. The
-other palettes keep Adobe's blue, and the **Palette highlight** setting keeps it
-on any palette.
+other built-in palettes keep Adobe's blue, a custom theme can name a highlight of
+its own, and the **Palette highlight** setting keeps the blue on any palette.
+
+## Custom themes
+
+**Custom** reads a whole theme from one setting, as JSON, so a theme can be
+shared as text and imported by pasting it into **Custom theme (JSON)**:
+
+```json
+{
+  "name": "Threshold",
+  "author": "Threshold Editor",
+  "base": "#050505",
+  "panel": "#0A0A0A",
+  "surface": "#121212",
+  "raised": "#1C1C1C",
+  "border": "#2B2B2B",
+  "text": "#FFFFFF",
+  "accent": "#DC2626",
+  "highlight": "#DC2626"
+}
+```
+
+| Key              |          | What it colors                                                  |
+|------------------|----------|-----------------------------------------------------------------|
+| `base`           | required | the darkest step: the deepest background                        |
+| `panel`          | required | the second step, and the title bar and menu bar                 |
+| `surface`        | required | the middle step                                                 |
+| `raised`         | required | the fourth step                                                 |
+| `border`         | required | the lightest step: dividers and edges                           |
+| `text`           | required | menu and title bar text                                         |
+| `accent`         | optional | hovered menu items; the border when left out                    |
+| `disabledText`   | optional | disabled menu items; halfway from text to panel when left out   |
+| `highlight`      | optional | the hue Premiere's blue takes; the blue stays when left out     |
+| `name`, `author` | optional | written to the log                                              |
+
+Colors are `"#RRGGBB"`. Keys the mod does not know are ignored, and so is
+whatever was copied around the braces — a code fence, a line of chat. A theme
+that is not valid JSON is not applied at all: Onyx stays, and the log says where
+the JSON stops making sense. A required color that is missing or unreadable
+falls back to Onyx's, and the log names it.
+
+Keep the five steps dark and in order, darkest first: Premiere's own text is
+light and is not recolored, so a light background leaves it unreadable. The
+tables above are a good place to start from.
 
 ## What it changes, and what it leaves alone
 
@@ -245,24 +288,14 @@ This mod is MIT as well.
   - amethyst: Amethyst — near black with a strong purple
   - crimson: Crimson — near black with a strong red
   - threshold: Threshold — the threshold-editor.com.br palette
-  - custom: Custom (uses the fields below)
-- customBase: "050505"
-  $name: Custom — base
-  $description: Hex RGB without "#". Deepest background. Only used by the Custom palette.
-- customPanel: "090909"
-  $name: Custom — panel
-- customSurface: "0E0E0E"
-  $name: Custom — surface
-- customElevated: "161616"
-  $name: Custom — raised
-- customBorder: "242424"
-  $name: Custom — border
-- customText: "E6E6E6"
-  $name: Custom — text
-  $description: Menu and title bar text. Disabled items use the tone halfway between it and the panel.
-- customAccent: "2E2E2E"
-  $name: Custom — accent
-  $description: Hovered menu items and system highlights. The one place a strong color fits without tinting everything else.
+  - custom: Custom — the theme JSON below
+- customTheme: '{"name": "Onyx", "base": "#050505", "panel": "#090909", "surface": "#0E0E0E", "raised": "#161616", "border": "#242424", "text": "#E6E6E6", "accent": "#2E2E2E"}'
+  $name: Custom theme (JSON)
+  $description: >-
+    Used when the palette is Custom. Paste a theme someone shared, or write your
+    own: base, panel, surface, raised, border and text are required; accent,
+    disabledText and highlight are optional; colors are "#RRGGBB". The readme
+    has the full format.
 - strength: 100
   $name: Strength
   $description: How much of the palette is applied over the original color, in percent. 100 = palette only.
@@ -303,8 +336,8 @@ This mod is MIT as well.
   $description: >-
     Gives Premiere's blue — track targeting, the focused panel's border, the
     active tool, selections and links — the palette's own hue, each blue at its
-    own brightness. Only Contrast, Violet, Blossom, Ember, Amethyst, Crimson and
-    Threshold carry one; the other palettes keep the blue.
+    own brightness. Contrast, Violet, Blossom, Ember, Amethyst, Crimson and
+    Threshold carry one, and a custom theme can; the others keep the blue.
 */
 // ==/WindhawkModSettings==
 
@@ -321,6 +354,7 @@ This mod is MIT as well.
 #include <cstring>
 #include <cwchar>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -4324,18 +4358,6 @@ static bool ParseHexColor(PCWSTR text, COLORREF* out) {
     return true;
 }
 
-static COLORREF ReadColorSetting(PCWSTR name, COLORREF fallback) {
-    auto text = WindhawkUtils::StringSetting::make(name);
-    COLORREF parsed = fallback;
-
-    if (!ParseHexColor(text, &parsed)) {
-        Wh_Log(L"invalid value in %s, using the default", name);
-        parsed = fallback;
-    }
-
-    return parsed;
-}
-
 struct NamedPalette {
     const wchar_t* id;
     Palette colors;
@@ -4471,6 +4493,455 @@ static const NamedPalette kPalettes[] = {
       RGB(0xDC, 0x26, 0x26)}},
 };
 
+/*
+    A custom theme is one JSON object in a single setting, so a theme can be
+    shared as text and imported by pasting it:
+
+        {"name": "Midnight", "author": "someone",
+         "base": "#05060A", "panel": "#0A0C14", "surface": "#10131F",
+         "raised": "#181C2C", "border": "#2A3048", "text": "#E6E9F5",
+         "accent": "#3A4270", "highlight": "#4F7BFF"}
+
+    The text comes from whoever shared it, so it is read strictly and within
+    fixed bounds: JSON that does not parse is rejected whole, never half
+    applied. Only what surrounds the object is forgiven — anything before its
+    first brace or after its last, like a code fence or a line of chat copied
+    along with it. Members the mod does not know are skipped however they are
+    nested, so a theme written for a later version still loads.
+*/
+constexpr size_t kMaxThemeLength = 16384;
+constexpr size_t kMaxThemeMembers = 64;
+constexpr int kMaxThemeDepth = 16;
+
+struct JsonCursor {
+    const wchar_t* p;
+    const wchar_t* end;
+};
+
+struct ThemeMember {
+    std::wstring key;
+    std::wstring value;
+    bool isString = false;
+};
+
+static void SkipJsonSpace(JsonCursor& c) {
+    while (c.p < c.end &&
+           (*c.p == L' ' || *c.p == L'\t' || *c.p == L'\n' || *c.p == L'\r')) {
+        c.p++;
+    }
+}
+
+static int JsonHexDigit(wchar_t c) {
+    if (c >= L'0' && c <= L'9') {
+        return c - L'0';
+    }
+
+    if (c >= L'a' && c <= L'f') {
+        return c - L'a' + 10;
+    }
+
+    if (c >= L'A' && c <= L'F') {
+        return c - L'A' + 10;
+    }
+
+    return -1;
+}
+
+// A string at the cursor, unescaped into `out`, or only skipped when it is null.
+static bool ReadJsonString(JsonCursor& c, std::wstring* out) {
+    if (c.p >= c.end || *c.p != L'"') {
+        return false;
+    }
+
+    c.p++;
+
+    while (c.p < c.end) {
+        wchar_t ch = *c.p++;
+
+        if (ch == L'"') {
+            return true;
+        }
+
+        if (ch < 0x20) {
+            return false;  // a raw control character, which JSON does not allow
+        }
+
+        if (ch == L'\\') {
+            if (c.p >= c.end) {
+                return false;
+            }
+
+            wchar_t escape = *c.p++;
+
+            switch (escape) {
+                case L'"':
+                case L'\\':
+                case L'/':
+                    ch = escape;
+                    break;
+                case L'b':
+                    ch = L'\b';
+                    break;
+                case L'f':
+                    ch = L'\f';
+                    break;
+                case L'n':
+                    ch = L'\n';
+                    break;
+                case L'r':
+                    ch = L'\r';
+                    break;
+                case L't':
+                    ch = L'\t';
+                    break;
+                case L'u': {
+                    if (c.end - c.p < 4) {
+                        return false;
+                    }
+
+                    int code = 0;
+
+                    for (int k = 0; k < 4; k++) {
+                        int digit = JsonHexDigit(c.p[k]);
+
+                        if (digit < 0) {
+                            return false;
+                        }
+
+                        code = code * 16 + digit;
+                    }
+
+                    c.p += 4;
+                    ch = static_cast<wchar_t>(code);  // UTF-16, as the setting is
+                    break;
+                }
+                default:
+                    return false;
+            }
+        }
+
+        if (out) {
+            out->push_back(ch);
+        }
+    }
+
+    return false;  // unterminated
+}
+
+static bool SkipJsonValue(JsonCursor& c, int depth);
+
+static bool SkipJsonWord(JsonCursor& c, const wchar_t* word) {
+    size_t length = wcslen(word);
+
+    if (static_cast<size_t>(c.end - c.p) < length || wcsncmp(c.p, word, length) != 0) {
+        return false;
+    }
+
+    c.p += length;
+    return true;
+}
+
+static bool SkipJsonDigits(JsonCursor& c) {
+    const wchar_t* start = c.p;
+
+    while (c.p < c.end && *c.p >= L'0' && *c.p <= L'9') {
+        c.p++;
+    }
+
+    return c.p > start;
+}
+
+static bool SkipJsonNumber(JsonCursor& c) {
+    if (c.p < c.end && *c.p == L'-') {
+        c.p++;
+    }
+
+    if (!SkipJsonDigits(c)) {
+        return false;
+    }
+
+    if (c.p < c.end && *c.p == L'.') {
+        c.p++;
+
+        if (!SkipJsonDigits(c)) {
+            return false;
+        }
+    }
+
+    if (c.p < c.end && (*c.p == L'e' || *c.p == L'E')) {
+        c.p++;
+
+        if (c.p < c.end && (*c.p == L'+' || *c.p == L'-')) {
+            c.p++;
+        }
+
+        if (!SkipJsonDigits(c)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// An object or an array, skipped whole; `depth` bounds how far it nests.
+static bool SkipJsonContainer(JsonCursor& c, int depth) {
+    if (depth > kMaxThemeDepth) {
+        return false;
+    }
+
+    bool object = *c.p == L'{';
+    wchar_t close = object ? L'}' : L']';
+
+    c.p++;
+    SkipJsonSpace(c);
+
+    if (c.p < c.end && *c.p == close) {
+        c.p++;
+        return true;
+    }
+
+    for (;;) {
+        if (object) {
+            if (!ReadJsonString(c, nullptr)) {
+                return false;
+            }
+
+            SkipJsonSpace(c);
+
+            if (c.p >= c.end || *c.p != L':') {
+                return false;
+            }
+
+            c.p++;
+        }
+
+        if (!SkipJsonValue(c, depth + 1)) {
+            return false;
+        }
+
+        SkipJsonSpace(c);
+
+        if (c.p >= c.end) {
+            return false;
+        }
+
+        if (*c.p == close) {
+            c.p++;
+            return true;
+        }
+
+        if (*c.p != L',') {
+            return false;
+        }
+
+        c.p++;
+        SkipJsonSpace(c);
+    }
+}
+
+static bool SkipJsonValue(JsonCursor& c, int depth) {
+    SkipJsonSpace(c);
+
+    if (c.p >= c.end) {
+        return false;
+    }
+
+    switch (*c.p) {
+        case L'"':
+            return ReadJsonString(c, nullptr);
+        case L'{':
+        case L'[':
+            return SkipJsonContainer(c, depth);
+        case L't':
+            return SkipJsonWord(c, L"true");
+        case L'f':
+            return SkipJsonWord(c, L"false");
+        case L'n':
+            return SkipJsonWord(c, L"null");
+        default:
+            return SkipJsonNumber(c);
+    }
+}
+
+/*
+    The members of the first object in `text`. False when it does not parse,
+    with `errorAt` the offset where reading stopped.
+*/
+static bool ReadThemeMembers(PCWSTR text, std::vector<ThemeMember>* members,
+                             size_t* errorAt) {
+    size_t length = wcsnlen(text, kMaxThemeLength + 1);
+    *errorAt = 0;
+
+    if (length > kMaxThemeLength) {
+        *errorAt = kMaxThemeLength;
+        return false;
+    }
+
+    const wchar_t* open = wcschr(text, L'{');
+
+    if (!open) {
+        return false;
+    }
+
+    JsonCursor c{open + 1, text + length};
+    SkipJsonSpace(c);
+
+    if (c.p < c.end && *c.p == L'}') {
+        return true;
+    }
+
+    for (;;) {
+        ThemeMember member;
+
+        bool ok = ReadJsonString(c, &member.key);
+
+        if (ok) {
+            SkipJsonSpace(c);
+            ok = c.p < c.end && *c.p == L':';
+        }
+
+        if (ok) {
+            c.p++;
+            SkipJsonSpace(c);
+
+            member.isString = c.p < c.end && *c.p == L'"';
+            ok = member.isString ? ReadJsonString(c, &member.value)
+                                 : SkipJsonValue(c, 1);
+        }
+
+        if (ok && members->size() < kMaxThemeMembers) {
+            members->push_back(std::move(member));
+        }
+
+        if (ok) {
+            SkipJsonSpace(c);
+            ok = c.p < c.end && (*c.p == L'}' || *c.p == L',');
+        }
+
+        if (!ok) {
+            *errorAt = static_cast<size_t>(c.p - text);
+            return false;
+        }
+
+        if (*c.p++ == L'}') {
+            return true;
+        }
+
+        SkipJsonSpace(c);
+    }
+}
+
+// The last member named `key`, as JSON readers usually take it, case aside.
+static const ThemeMember* FindThemeMember(const std::vector<ThemeMember>& members,
+                                          PCWSTR key) {
+    const ThemeMember* found = nullptr;
+
+    for (const ThemeMember& member : members) {
+        if (_wcsicmp(member.key.c_str(), key) == 0) {
+            found = &member;
+        }
+    }
+
+    return found;
+}
+
+static bool ReadThemeColor(const ThemeMember* member, COLORREF* out) {
+    return member && member->isString && ParseHexColor(member->value.c_str(), out);
+}
+
+/*
+    The palette a custom theme describes. The six colors every surface needs
+    fall back to Onyx's one at a time, each logged; the optional ones have
+    defaults of their own.
+*/
+static Palette LoadCustomTheme(const Palette& onyx) {
+    auto json = WindhawkUtils::StringSetting::make(L"customTheme");
+    PCWSTR text = json;
+
+    std::vector<ThemeMember> members;
+    size_t errorAt = 0;
+
+    if (!*text) {
+        Wh_Log(L"custom theme is empty; Onyx is used instead");
+        return onyx;
+    }
+
+    if (!ReadThemeMembers(text, &members, &errorAt)) {
+        bool curly = wcschr(text, L'“') || wcschr(text, L'”');
+
+        Wh_Log(L"custom theme is not valid JSON (it stops making sense at "
+               L"character %u)%s; Onyx is used instead",
+               static_cast<unsigned>(errorAt + 1),
+               curly ? L", and it has curly quotes where straight ones belong" : L"");
+        return onyx;
+    }
+
+    Palette p = onyx;
+
+    const struct {
+        PCWSTR key;
+        COLORREF* color;
+    } kRequired[] = {
+        {L"base", &p.ramp[0]},   {L"panel", &p.ramp[1]},  {L"surface", &p.ramp[2]},
+        {L"raised", &p.ramp[3]}, {L"border", &p.ramp[4]}, {L"text", &p.text},
+    };
+
+    for (const auto& field : kRequired) {
+        if (!ReadThemeColor(FindThemeMember(members, field.key), field.color)) {
+            Wh_Log(L"custom theme: \"%s\" is missing or not a #RRGGBB color; "
+                   L"Onyx's is used",
+                   field.key);
+        }
+    }
+
+    // Present but unreadable is worth a line; absent just takes the default.
+    auto optional = [&](PCWSTR key, COLORREF* color) {
+        const ThemeMember* member = FindThemeMember(members, key);
+
+        if (!member) {
+            return false;
+        }
+
+        if (ReadThemeColor(member, color)) {
+            return true;
+        }
+
+        Wh_Log(L"custom theme: \"%s\" is not a #RRGGBB color; left out", key);
+        return false;
+    };
+
+    if (!optional(L"accent", &p.accent)) {
+        p.accent = p.ramp[4];
+    }
+
+    /*
+        Halfway from the text to the panel is close to where the built-in
+        palettes put disabled text, and it always lies between the two, which
+        Onyx's #777777 would not once a theme's text is darker than that.
+    */
+    if (!optional(L"disabledText", &p.dimText)) {
+        p.dimText = RGB((GetRValue(p.text) + GetRValue(p.ramp[1])) / 2,
+                        (GetGValue(p.text) + GetGValue(p.ramp[1])) / 2,
+                        (GetBValue(p.text) + GetBValue(p.ramp[1])) / 2);
+    }
+
+    if (!optional(L"highlight", &p.highlight)) {
+        p.highlight = CLR_INVALID;
+    }
+
+    const ThemeMember* name = FindThemeMember(members, L"name");
+    const ThemeMember* author = FindThemeMember(members, L"author");
+
+    if (name && name->isString) {
+        bool by = author && author->isString;
+
+        Wh_Log(L"custom theme: %.64s%s%.64s", name->value.c_str(),
+               by ? L", by " : L"", by ? author->value.c_str() : L"");
+    }
+
+    return p;
+}
+
 static void LoadSettings() {
     auto name = WindhawkUtils::StringSetting::make(L"palette");
 
@@ -4478,23 +4949,7 @@ static void LoadSettings() {
     Palette p = kPalettes[0].colors;
 
     if (wcscmp(name, L"custom") == 0) {
-        p.ramp[0] = ReadColorSetting(L"customBase", p.ramp[0]);
-        p.ramp[1] = ReadColorSetting(L"customPanel", p.ramp[1]);
-        p.ramp[2] = ReadColorSetting(L"customSurface", p.ramp[2]);
-        p.ramp[3] = ReadColorSetting(L"customElevated", p.ramp[3]);
-        p.ramp[4] = ReadColorSetting(L"customBorder", p.ramp[4]);
-        p.text = ReadColorSetting(L"customText", p.text);
-        p.accent = ReadColorSetting(L"customAccent", p.accent);
-
-        /*
-            Disabled text has no setting of its own. Halfway from the text to
-            the panel is close to where the built-in palettes put it, and it
-            always lies between the two, which Onyx's #777777 would not once
-            the custom text is darker than that.
-        */
-        p.dimText = RGB((GetRValue(p.text) + GetRValue(p.ramp[1])) / 2,
-                        (GetGValue(p.text) + GetGValue(p.ramp[1])) / 2,
-                        (GetBValue(p.text) + GetBValue(p.ramp[1])) / 2);
+        p = LoadCustomTheme(p);
     } else {
         for (const NamedPalette& candidate : kPalettes) {
             if (wcscmp(name, candidate.id) == 0) {

@@ -5,8 +5,9 @@ Pro interface — panels, timeline, monitors, window frame and menu bar — far
 past what the Appearance brightness slider reaches.
 
 Fourteen palettes — four near-black, four tinted, four vivid and two that hold a
-strong accent over near-black panels — plus a custom one. The seven added in
-1.1 also give Premiere's blue their own hue.
+strong accent over near-black panels — plus custom themes, pasted in as JSON so
+they can be shared and imported. The seven added in 1.1 also give Premiere's
+blue their own hue.
 
 ## Screenshots
 
