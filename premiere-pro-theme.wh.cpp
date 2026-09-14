@@ -2,7 +2,7 @@
 // @id              premiere-pro-theme
 // @name            Premiere Pro Theme
 // @description     Recolors the Adobe Premiere Pro interface — panels, timeline, monitors, window frame and menu bar — with a choice of very dark palettes.
-// @version         1.1.0
+// @version         1.0.0
 // @author          Threshold Editor
 // @license         MIT
 // @include         Adobe Premiere Pro.exe
@@ -356,6 +356,7 @@ This mod is MIT as well.
 #include <cmath>
 #include <cstring>
 #include <cwchar>
+#include <new>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -387,7 +388,7 @@ struct Palette {
         The hue Premiere's blue takes: track targeting, the focused panel's
         border, the active tool. Each blue keeps its own luminance and takes
         only the hue, so white text on a blue button keeps its contrast.
-        CLR_INVALID keeps the blue, as the palettes before 1.1 do.
+        CLR_INVALID keeps the blue, as Onyx through Glitch do.
     */
     COLORREF highlight = CLR_INVALID;
 };
@@ -2605,8 +2606,16 @@ static bool ReadWholeFile(LPCWSTR path, std::vector<char>* bytes) {
               size.QuadPart <= kMaxStylesheetBytes;
 
     if (ok) {
-        bytes->resize(static_cast<size_t>(size.QuadPart));
+        // A hook must not throw into Premiere: short of memory, the panel
+        // simply gets its own stylesheet.
+        try {
+            bytes->resize(static_cast<size_t>(size.QuadPart));
+        } catch (const std::bad_alloc&) {
+            ok = false;
+        }
+    }
 
+    if (ok) {
         DWORD read = 0;
         ok = ReadFile(file, bytes->data(), static_cast<DWORD>(bytes->size()), &read,
                       nullptr) &&
@@ -2616,6 +2625,23 @@ static bool ReadWholeFile(LPCWSTR path, std::vector<char>* bytes) {
     CloseHandle(file);
 
     return ok;
+}
+
+// Writes `value` in decimal at `out` and returns the end.
+static wchar_t* AppendDecimal(wchar_t* out, unsigned long value) {
+    wchar_t digits[12];
+    int count = 0;
+
+    do {
+        digits[count++] = static_cast<wchar_t>(L'0' + value % 10);
+        value /= 10;
+    } while (value);
+
+    while (count) {
+        *out++ = digits[--count];
+    }
+
+    return out;
 }
 
 /*
@@ -2631,18 +2657,43 @@ static HANDLE WriteTemporaryCopy(const std::vector<char>& bytes, DWORD callerFla
         return INVALID_HANDLE_VALUE;
     }
 
-    wchar_t name[1024]{};
-    wsprintfW(name, L"%spremiere-pro-theme-%lu-%ld.css", folder,
-              GetCurrentProcessId(), InterlockedIncrement(&g_stylesheetSerial));
-
     bool overlapped = (callerFlags & FILE_FLAG_OVERLAPPED) != 0;
+    HANDLE copy = INVALID_HANDLE_VALUE;
 
-    HANDLE copy = CreateFileW_Original(
-        name, GENERIC_READ | GENERIC_WRITE | DELETE, FILE_SHARE_READ | FILE_SHARE_DELETE,
-        nullptr, CREATE_ALWAYS,
-        FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE |
-            (overlapped ? FILE_FLAG_OVERLAPPED : 0),
-        nullptr);
+    /*
+        CREATE_NEW, never CREATE_ALWAYS: the name is predictable, so whatever
+        already sits at it — a leftover, or a link planted to redirect the
+        write — is stepped around rather than opened or followed.
+    */
+    for (int attempt = 0; attempt < 8 && copy == INVALID_HANDLE_VALUE; attempt++) {
+        constexpr wchar_t kPrefix[] = L"premiere-pro-theme-";
+        wchar_t name[MAX_PATH + 64]{};
+        wchar_t* end = name;
+
+        wmemcpy(end, folder, length);
+        end += length;
+        wmemcpy(end, kPrefix, ARRAYSIZE(kPrefix) - 1);
+        end += ARRAYSIZE(kPrefix) - 1;
+        end = AppendDecimal(end, GetCurrentProcessId());
+        *end++ = L'-';
+        end = AppendDecimal(
+            end, static_cast<unsigned long>(InterlockedIncrement(&g_stylesheetSerial)));
+        wmemcpy(end, L".css", 5);  // and its terminator
+
+        copy = CreateFileW_Original(
+            name, GENERIC_READ | GENERIC_WRITE | DELETE,
+            FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr, CREATE_NEW,
+            FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE |
+                (overlapped ? FILE_FLAG_OVERLAPPED : 0),
+            nullptr);
+
+        DWORD error = copy == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
+
+        if (error != ERROR_SUCCESS && error != ERROR_FILE_EXISTS &&
+            error != ERROR_ALREADY_EXISTS) {
+            break;
+        }
+    }
 
     if (copy == INVALID_HANDLE_VALUE) {
         return copy;
