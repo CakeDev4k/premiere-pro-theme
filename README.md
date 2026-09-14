@@ -5,9 +5,9 @@ Pro interface — panels, timeline, monitors, window frame and menu bar — far
 past what the Appearance brightness slider reaches.
 
 Fourteen palettes — four near-black, four tinted, four vivid and two that hold a
-strong accent over near-black panels — plus custom themes, pasted in as JSON so
-they can be shared and imported. Seven of the palettes also give Premiere's
-blue their own hue.
+strong accent over near-black panels — plus a custom theme, one labelled field
+per color in the settings. Seven of the palettes also give Premiere's blue
+their own hue.
 
 ## Screenshots
 
@@ -62,6 +62,8 @@ covers all five:
   menus, none of which any theme reaches.
 - **UXP** — the Text panel, Import, Export and the Home screen, drawn from
   stylesheets of their own; the mod recolors each one as Premiere reads it.
+  Off by default: a panel reads its stylesheet once, so that layer only
+  follows a change across a restart.
 
 The full explanation of how each is found, what is deliberately left untouched,
 and why the palettes are the colors they are, is in the mod's own readme at the
@@ -88,9 +90,10 @@ work on any version. Native dark mode needs Windows 10 build 17763 or newer.
 Two surfaces are only partly covered, and the mod says so rather than patching
 blind:
 
-- **UXP panels follow a change after a restart.** The Text panel, Import,
-  Export and the Home screen read their stylesheets once, when they load, so a
-  palette switch, or disabling the mod, shows there after Premiere restarts.
+- **UXP panels follow a change after a restart**, which is why that layer ships
+  off. The Text panel, Import, Export and the Home screen read their
+  stylesheets once, when they load, so turning it on, a palette switch, or
+  disabling the mod, shows there after Premiere restarts.
 - **The band around the video in the monitors**, with a tinted palette. Zoomed
   out, the monitors paint the area around the picture a gray made from the red
   channel of the panel color, through a path none of the mod's hooks reaches.

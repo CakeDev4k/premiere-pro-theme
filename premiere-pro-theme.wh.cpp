@@ -117,42 +117,28 @@ keeps its contrast. The row is the track-targeting shade; Contrast's is the gray
 
 ## Custom themes
 
-**Custom** reads a whole theme from one setting, as JSON, so a theme can be
-shared as text and imported by pasting it into **Custom theme (JSON)**:
+**Custom** takes its colors from the **Custom theme** group in the settings,
+one field each:
 
-```json
-{
-  "name": "Threshold",
-  "author": "Threshold Editor",
-  "base": "#050505",
-  "panel": "#0A0A0A",
-  "surface": "#121212",
-  "raised": "#1C1C1C",
-  "border": "#2B2B2B",
-  "text": "#FFFFFF",
-  "accent": "#DC2626",
-  "highlight": "#DC2626"
-}
-```
+| Field             |          | What it colors                                                |
+|-------------------|----------|---------------------------------------------------------------|
+| **Base**          | required | the darkest step: the deepest background                      |
+| **Panel**         | required | the second step, and the title bar and menu bar               |
+| **Surface**       | required | the middle step                                               |
+| **Raised**        | required | the fourth step                                               |
+| **Border**        | required | the lightest step: dividers and edges                         |
+| **Text**          | required | menu and title bar text                                       |
+| **Accent**        | optional | hovered menu items; the border when left empty                |
+| **Disabled text** | optional | disabled menu items; halfway from text to panel when empty    |
+| **Highlight**     | optional | the hue Premiere's blue takes; the blue stays when left empty |
 
-| Key              |          | What it colors                                                  |
-|------------------|----------|-----------------------------------------------------------------|
-| `base`           | required | the darkest step: the deepest background                        |
-| `panel`          | required | the second step, and the title bar and menu bar                 |
-| `surface`        | required | the middle step                                                 |
-| `raised`         | required | the fourth step                                                 |
-| `border`         | required | the lightest step: dividers and edges                           |
-| `text`           | required | menu and title bar text                                         |
-| `accent`         | optional | hovered menu items; the border when left out                    |
-| `disabledText`   | optional | disabled menu items; halfway from text to panel when left out   |
-| `highlight`      | optional | the hue Premiere's blue takes; the blue stays when left out     |
-| `name`, `author` | optional | written to the log                                              |
+Colors are `#RRGGBB`. The group starts as Onyx, with **Highlight** empty. A
+required field left empty or misspelled falls back to Onyx's color, named in
+the log, so the interface never ends up half themed.
 
-Colors are `"#RRGGBB"`; an optional key left empty (`""`) takes its default, so
-`"highlight": ""` keeps Premiere's blue. The setting starts with every key and
-Onyx's colors. Unknown keys, and anything copied around the braces, are
-ignored. Invalid JSON is not applied — Onyx stays and the log says where it
-broke — and a missing required color falls back to Onyx's, logged by name.
+To share a theme, use Windhawk's own **Mod settings** export under the
+**Advanced** tab: it writes the whole settings out as text, and reads them
+back the same way.
 
 Keep the five steps dark and in order: Premiere's own text is light and is not
 recolored.
@@ -171,7 +157,8 @@ Each layer has its own switch in the settings:
   own modules.
 - **UXP panels** — the Text panel, Import, Export, Quick Export, Progress,
   Preset Manager and the Home screen, which Premiere draws from stylesheets of
-  their own.
+  their own. Off by default, because those panels only follow it across a
+  restart.
 - **Palette highlight** — Premiere's blue, on the palettes that carry a
   highlight.
 
@@ -205,11 +192,12 @@ mod's process **exclusion** list and this one takes over.
 
 ## Known limitations
 
-**UXP panels change on restart.** Premiere reads their stylesheets once, when a
-panel loads, and the mod recolors that read — a temporary copy, deleted as soon
-as it is closed; nothing on disk changes. So a palette switch, or disabling the
-mod, shows on those panels after Premiere restarts. Frame.io and Adobe Stock
-carry no Spectrum grays and keep their own look.
+**UXP panels change on restart**, which is why they are off by default.
+Premiere reads their stylesheets once, when a panel loads, and the mod recolors
+that read — a temporary copy, deleted as soon as it is closed; nothing on disk
+changes. So turning the switch on, a palette switch, and turning it back off or
+disabling the mod all show on those panels after Premiere restarts. Frame.io
+and Adobe Stock carry no Spectrum grays and keep their own look.
 
 **The band around the video, with a tinted palette.** Zoomed out, the monitors
 paint the area around the picture a gray made from the red channel of the panel
@@ -268,15 +256,45 @@ This mod is MIT as well.
   - amethyst: Amethyst — near black with a strong purple
   - crimson: Crimson — near black with a strong red
   - threshold: Threshold — the threshold-editor.com.br palette
-  - custom: Custom — the theme JSON below
-- customTheme: '{"name": "My theme", "author": "", "base": "#050505", "panel": "#090909", "surface": "#0E0E0E", "raised": "#161616", "border": "#242424", "text": "#E6E6E6", "disabledText": "#777777", "accent": "#2E2E2E", "highlight": ""}'
-  $name: Custom theme (JSON)
+  - custom: Custom — the colors in the group below
+- customTheme:
+  - base: "#050505"
+    $name: Base
+    $description: The darkest step — the deepest background.
+  - panel: "#090909"
+    $name: Panel
+    $description: The second step, and the title bar and the menu bar.
+  - surface: "#0E0E0E"
+    $name: Surface
+    $description: The middle step.
+  - raised: "#161616"
+    $name: Raised
+    $description: The fourth step.
+  - border: "#242424"
+    $name: Border
+    $description: The lightest step — dividers and edges.
+  - text: "#E6E6E6"
+    $name: Text
+    $description: Menu and title bar text.
+  - accent: "#2E2E2E"
+    $name: Accent
+    $description: Hovered menu items. Left empty, the border is used.
+  - disabledText: "#777777"
+    $name: Disabled text
+    $description: >-
+      Disabled menu items. Left empty, halfway from the text to the panel is
+      used.
+  - highlight: ""
+    $name: Highlight
+    $description: >-
+      The hue Premiere's blue — track targeting, the focused panel, the active
+      tool — takes. Left empty, the blue stays.
+  $name: Custom theme
   $description: >-
-    Used when the palette is Custom. Paste a theme someone shared, or edit this
-    one, which starts with every key and Onyx's colors. Colors are "#RRGGBB".
-    base, panel, surface, raised, border and text are required; accent,
-    disabledText and highlight can be left empty for their defaults, and an
-    empty highlight keeps Premiere's blue. The readme has the full format.
+    Used when the palette is Custom. It starts as Onyx. Colors are #RRGGBB; the
+    six steps are required, and one left empty or unreadable falls back to
+    Onyx's, which the log names. To share a theme, export the mod's settings
+    from the Advanced tab.
 - strength: 100
   $name: Strength
   $description: How much of the palette is applied over the original color, in percent. 100 = palette only.
@@ -305,13 +323,14 @@ This mod is MIT as well.
 - gdiHook: true
   $name: GDI surfaces
   $description: Darkens GDI brushes, pens and text backgrounds created by Premiere's own modules.
-- uxpPanels: true
+- uxpPanels: false
   $name: UXP panels
   $description: >-
     The Text panel, Import, Export, Quick Export, Progress, Preset Manager and
-    the Home screen, which Premiere draws from stylesheets of their own. Those
-    are read once, when a panel loads, so this switch, a palette change and
-    disabling the mod all show there after Premiere restarts.
+    the Home screen, which Premiere draws from stylesheets of their own. Off by
+    default because those are read once, when a panel loads: this switch, a
+    palette change and disabling the mod all show there only after Premiere
+    restarts.
 - highlight: true
   $name: Palette highlight
   $description: >-
@@ -535,20 +554,38 @@ static bool Claim(volatile LONG* flag) {
     loader notification.
 */
 struct ModuleRange {
+    /*
+        begin is written once, before the entry is published, and never
+        changes again; end is the one field that moves, and zero means the
+        module is gone. A reader therefore never sees one module's begin
+        paired with another's end, without taking a lock for it.
+    */
     uintptr_t begin;
-    uintptr_t end;
+    std::atomic<uintptr_t> end;
 };
 
 /*
     Premiere 2026 maps 59 dva* modules plus UIFramework and the executable;
-    the rest is headroom for versions that add more.
+    the rest is headroom for versions that add more, and for the plugin and
+    codec modules that come and go during a session. A module that unloads
+    leaves its entry behind with end cleared, and reloading it at the same
+    base — which is what the loader normally does — revives that entry
+    instead of taking another.
 */
-constexpr size_t kMaxModuleRanges = 256;
+constexpr size_t kMaxModuleRanges = 512;
 
 ModuleRange g_moduleRanges[kMaxModuleRanges];
 volatile LONG g_moduleRangeCount = 0;
 volatile LONG g_moduleRangesFullLogged = FALSE;
 SRWLOCK g_moduleRangeLock = SRWLOCK_INIT;
+
+/*
+    Bumped whenever a range is added or dropped. IsAdobeUICaller caches its
+    last hit per thread, and that cache would otherwise outlive the module it
+    came from; comparing the epoch throws it away the moment the table moves.
+    It starts at 1, so the zero every thread starts with never matches.
+*/
+volatile LONG g_moduleRangeEpoch = 1;
 
 /*
     Adobe's whole UI toolkit is prefixed dva (dvaui, dvacore, ...).
@@ -577,36 +614,72 @@ static void AddModuleRange(uintptr_t begin, uintptr_t end) {
     AcquireSRWLockExclusive(&g_moduleRangeLock);
 
     LONG count = g_moduleRangeCount;
-    bool known = false;
+    bool stored = false;
 
-    for (LONG i = 0; i < count; i++) {
-        if (g_moduleRanges[i].begin == begin) {
-            known = true;
-            break;
+    for (LONG i = 0; i < count && !stored; i++) {
+        if (g_moduleRanges[i].begin != begin) {
+            continue;
         }
+
+        /*
+            Either already known, or an entry whose module unloaded and has
+            been mapped over. Writing end is the whole update: begin is
+            already this base, and end is what publishes the entry again.
+        */
+        g_moduleRanges[i].end.store(end, std::memory_order_release);
+        InterlockedIncrement(&g_moduleRangeEpoch);
+        stored = true;
     }
 
-    bool full = !known && count >= static_cast<LONG>(kMaxModuleRanges);
-
-    if (!known && !full) {
-        g_moduleRanges[count] = {begin, end};
+    if (!stored && count < static_cast<LONG>(kMaxModuleRanges)) {
+        g_moduleRanges[count].begin = begin;
+        g_moduleRanges[count].end.store(end, std::memory_order_release);
         InterlockedExchange(&g_moduleRangeCount, count + 1);
+        InterlockedIncrement(&g_moduleRangeEpoch);
+        stored = true;
     }
 
     ReleaseSRWLockExclusive(&g_moduleRangeLock);
 
-    if (full && Claim(&g_moduleRangesFullLogged)) {
+    if (!stored && Claim(&g_moduleRangesFullLogged)) {
         Wh_Log(L"module range table full; GDI calls from Adobe modules loaded "
                L"from now on will not be recognized");
     }
 }
 
 /*
-    Every module mapped after init, including the dependencies LoadLibraryExW
-    never returns, which is how most dva* modules arrive in Premiere. The
-    notification carries the name, base and size, so nothing here asks the
-    loader anything. It runs with the loader lock held, and it is unregistered
-    in Wh_ModUninit, before the image that contains it goes away.
+    A module that unloads stops counting as Adobe UI: its address range is
+    about to be handed to whatever the loader maps there next, and a
+    third-party plugin painting from a dead dva module's base must not be
+    recolored. Clearing end is a single store, so a reader either sees the
+    module or does not.
+*/
+static void DropModuleRange(uintptr_t begin) {
+    AcquireSRWLockExclusive(&g_moduleRangeLock);
+
+    LONG count = g_moduleRangeCount;
+
+    for (LONG i = 0; i < count; i++) {
+        if (g_moduleRanges[i].begin != begin ||
+            g_moduleRanges[i].end.load(std::memory_order_relaxed) == 0) {
+            continue;
+        }
+
+        g_moduleRanges[i].end.store(0, std::memory_order_release);
+        InterlockedIncrement(&g_moduleRangeEpoch);
+        break;
+    }
+
+    ReleaseSRWLockExclusive(&g_moduleRangeLock);
+}
+
+/*
+    Every module mapped or unmapped after init, including the dependencies
+    LoadLibraryExW never returns, which is how most dva* modules arrive in
+    Premiere. The notification carries the name, base and size, so nothing
+    here asks the loader anything. It runs with the loader lock held, and it
+    is unregistered in Wh_ModUninit, before the image that contains it goes
+    away.
 */
 struct LdrUnicodeString {
     USHORT length;  // in bytes, and not terminated
@@ -623,6 +696,7 @@ struct LdrDllLoadedData {
 };
 
 constexpr ULONG kLdrDllLoaded = 1;
+constexpr ULONG kLdrDllUnloaded = 2;
 
 using LdrDllNotification_t = VOID(CALLBACK*)(ULONG, const LdrDllLoadedData*,
                                              PVOID);
@@ -634,8 +708,8 @@ PVOID g_dllNotificationCookie = nullptr;
 
 static VOID CALLBACK OnDllNotification(ULONG reason,
                                        const LdrDllLoadedData* data, PVOID) {
-    if (reason != kLdrDllLoaded || !data || !data->baseDllName ||
-        !data->baseDllName->buffer) {
+    if ((reason != kLdrDllLoaded && reason != kLdrDllUnloaded) || !data ||
+        !data->baseDllName || !data->baseDllName->buffer) {
         return;
     }
 
@@ -646,6 +720,13 @@ static VOID CALLBACK OnDllNotification(ULONG reason,
     }
 
     auto base = reinterpret_cast<uintptr_t>(data->dllBase);
+
+    // Both reasons carry the same fields; unloaded only needs the base.
+    if (reason == kLdrDllUnloaded) {
+        DropModuleRange(base);
+        return;
+    }
+
     AddModuleRange(base, base + data->sizeOfImage);
 }
 
@@ -678,8 +759,21 @@ static void StopWatchingModuleLoads() {
                     GetProcAddress(ntdll, "LdrUnregisterDllNotification"))
               : nullptr;
 
-    if (unregisterNotification) {
-        unregisterNotification(g_dllNotificationCookie);
+    /*
+        If this ever failed, the callback would stay registered into an image
+        that is about to be unmapped, so the status is worth a line even
+        though there is nothing left to try.
+    */
+    if (!unregisterNotification) {
+        Wh_Log(L"LdrUnregisterDllNotification is missing; the DLL "
+               L"notification could not be unregistered");
+    } else {
+        LONG status = unregisterNotification(g_dllNotificationCookie);
+
+        if (status != 0) {
+            Wh_Log(L"LdrUnregisterDllNotification failed (0x%08X)",
+                   static_cast<unsigned>(status));
+        }
     }
 
     g_dllNotificationCookie = nullptr;
@@ -822,23 +916,40 @@ static void SnapshotAdobeModules() {
     }
 }
 
-// The range of this thread's last match: consecutive calls mostly come from one module.
+/*
+    The range of this thread's last match: consecutive calls mostly come from
+    one module. The epoch it was taken under comes with it, so the cache is
+    dropped the moment any module is added or unloaded rather than outliving
+    the module it names.
+*/
 thread_local uintptr_t g_lastAdobeBegin = 0;
 thread_local uintptr_t g_lastAdobeEnd = 0;
+thread_local LONG g_lastAdobeEpoch = 0;
 
 static bool IsAdobeUICaller(void* caller) {
     auto p = reinterpret_cast<uintptr_t>(caller);
+    LONG epoch = g_moduleRangeEpoch;
 
-    if (p >= g_lastAdobeBegin && p < g_lastAdobeEnd) {
+    // Read before the scan, so a change during it only costs the next call.
+    if (epoch == g_lastAdobeEpoch && p >= g_lastAdobeBegin && p < g_lastAdobeEnd) {
         return true;
     }
 
     LONG count = g_moduleRangeCount;
 
     for (LONG i = 0; i < count; i++) {
-        if (p >= g_moduleRanges[i].begin && p < g_moduleRanges[i].end) {
-            g_lastAdobeBegin = g_moduleRanges[i].begin;
-            g_lastAdobeEnd = g_moduleRanges[i].end;
+        uintptr_t end = g_moduleRanges[i].end.load(std::memory_order_acquire);
+
+        if (end == 0) {
+            continue;  // unloaded
+        }
+
+        uintptr_t begin = g_moduleRanges[i].begin;
+
+        if (p >= begin && p < end) {
+            g_lastAdobeBegin = begin;
+            g_lastAdobeEnd = end;
+            g_lastAdobeEpoch = epoch;
             return true;
         }
     }
@@ -962,10 +1073,6 @@ static bool ShouldConvertWith(const Settings& s, const DvaColorRGBA& in) {
     return HighlightIndex(s, in) >= 0;
 }
 
-static bool ShouldConvert(const DvaColorRGBA& in) {
-    return ShouldConvertWith(CurrentSettings(), in);
-}
-
 /*
     The tone `in` becomes: a ramp stop for a gray, the highlight shade for a
     blue. The caller passes one settings snapshot for the whole conversion, so
@@ -988,8 +1095,12 @@ static bool PaletteTarget(const Settings& s, const DvaColorRGBA& in, COLORREF* t
 // One bit per kInterfaceBlues entry a hook recolored, logged at unload.
 volatile LONG64 g_bluesRecolored = 0;
 
-static bool ConvertDvaColor(const DvaColorRGBA& in, DvaColorRGBA* out) {
-    const Settings& s = CurrentSettings();
+/*
+    The caller passes the snapshot it already took, for the same reason
+    PaletteTarget does: one decision is made with one set of settings.
+*/
+static bool ConvertDvaColorWith(const Settings& s, const DvaColorRGBA& in,
+                                DvaColorRGBA* out) {
     COLORREF target = 0;
     int blue = -1;
 
@@ -1011,6 +1122,10 @@ static bool ConvertDvaColor(const DvaColorRGBA& in, DvaColorRGBA* out) {
     out->a = in.a;
 
     return true;
+}
+
+static bool ConvertDvaColor(const DvaColorRGBA& in, DvaColorRGBA* out) {
+    return ConvertDvaColorWith(CurrentSettings(), in, out);
 }
 
 // ============================================================================
@@ -1134,11 +1249,13 @@ volatile LONG g_generation = 0;
     src.
 */
 static void RefreshSlot(ColorSlot& slot, LONG generation, bool restoreOriginals) {
-    // ConvertDvaColor leaves dst untouched when it declines.
+    const Settings& s = CurrentSettings();
+
+    // ConvertDvaColorWith leaves dst untouched when it declines.
     DvaColorRGBA dst = slot.src;
 
-    if (!restoreOriginals && CurrentSettings().dvauiHook) {
-        ConvertDvaColor(slot.src, &dst);
+    if (!restoreOriginals && s.dvauiHook) {
+        ConvertDvaColorWith(s, slot.src, &dst);
     }
 
     slot.dst = dst;
@@ -1689,7 +1806,9 @@ static bool ContentScopesMatter() {
     and float comparisons turn them away before the recent colors are read.
 */
 static bool ConvertForPaint(const DvaColorRGBA* in, DvaColorRGBA* out) {
-    if (!CurrentSettings().brushHook || !in || InContentScope()) {
+    const Settings& s = CurrentSettings();
+
+    if (!s.brushHook || !in || InContentScope()) {
         return false;
     }
 
@@ -1699,7 +1818,7 @@ static bool ConvertForPaint(const DvaColorRGBA* in, DvaColorRGBA* out) {
     }
 
     // Cheap float test, rejects the majority.
-    if (!ShouldConvert(*in)) {
+    if (!ShouldConvertWith(s, *in)) {
         return false;
     }
 
@@ -1708,7 +1827,7 @@ static bool ConvertForPaint(const DvaColorRGBA* in, DvaColorRGBA* out) {
         return false;
     }
 
-    if (!ConvertDvaColor(*in, out)) {
+    if (!ConvertDvaColorWith(s, *in, out)) {
         return false;
     }
 
@@ -2419,15 +2538,29 @@ static bool RecolorCssHex(char* text, size_t size, size_t hash) {
         return false;
     }
 
-    int rgb[3];
+    /*
+        The case follows the letters already there, the alpha pair included:
+        the first letter across the whole run decides, so #00ff00AA stays
+        lowercase and #001100AA is written uppercase.
+    */
     bool upper = false;
 
-    for (int k = 0; k < 3; k++) {
-        char high = text[start + 2 * k];
-        char low = text[start + 2 * k + 1];
+    for (size_t i = start; i < end; i++) {
+        if (text[i] >= 'A' && text[i] <= 'F') {
+            upper = true;
+            break;
+        }
 
-        rgb[k] = CssHexDigit(high) * 16 + CssHexDigit(low);
-        upper = upper || (high >= 'A' && high <= 'F') || (low >= 'A' && low <= 'F');
+        if (text[i] >= 'a' && text[i] <= 'f') {
+            break;
+        }
+    }
+
+    int rgb[3];
+
+    for (int k = 0; k < 3; k++) {
+        rgb[k] = CssHexDigit(text[start + 2 * k]) * 16 +
+                 CssHexDigit(text[start + 2 * k + 1]);
     }
 
     if (!RecolorCssChannels(rgb)) {
@@ -4092,6 +4225,8 @@ static bool PaintMenuBarBackground(HWND hwnd, LPARAM lParam) {
     return true;
 }
 
+volatile LONG g_menuBarTextFailedLogged = FALSE;
+
 static bool PaintMenuBarItem(HWND hwnd, LPARAM lParam) {
     auto* draw = reinterpret_cast<UahDrawMenuItem*>(lParam);
 
@@ -4118,7 +4253,9 @@ static bool PaintMenuBarItem(HWND hwnd, LPARAM lParam) {
     /*
         Everything that can fail is resolved before anything is painted.
         Filling first and failing after would hand the item back to
-        DefWindowProc, which then paints it again on top of the fill.
+        DefWindowProc, which then paints it again on top of the fill — which
+        is also why, once the fill is down, this returns true whatever
+        DrawThemeTextEx says.
     */
     DrawThemeTextEx_t drawText = nullptr;
     std::optional<MenuBarTheme> theme;
@@ -4177,7 +4314,18 @@ static bool PaintMenuBarItem(HWND hwnd, LPARAM lParam) {
     HRESULT hr = drawText(theme->get(), draw->um.hdc, kMenuBarItem, 1, label,
                           static_cast<int>(itemInfo.cch), flags, &rect, &opts);
 
-    return SUCCEEDED(hr);
+    /*
+        The background is painted; only the label is missing. Handing the item
+        back to DefWindowProc now would redraw it in the Windows gray, so this
+        keeps the item and logs once — the bar repaints constantly.
+    */
+    if (FAILED(hr) && Claim(&g_menuBarTextFailedLogged)) {
+        Wh_Log(L"a menu bar item's text could not be drawn (0x%08X); its "
+               L"background is still painted",
+               static_cast<unsigned>(hr));
+    }
+
+    return true;
 }
 
 /*
@@ -4350,11 +4498,11 @@ static COLORREF DvaToGdi(const DvaColorRGBA& color) {
     on 8-bit channels, so a COLORREF compares equal to the float color it was
     made from.
 */
-static COLORREF ConvertGdiColor(COLORREF color) {
+static COLORREF ConvertGdiColor(const Settings& s, COLORREF color) {
     DvaColorRGBA in = GdiToDva(color);
     DvaColorRGBA out{};
 
-    if (IsProducedColor(in) || !ConvertDvaColor(in, &out)) {
+    if (IsProducedColor(in) || !ConvertDvaColorWith(s, in, &out)) {
         return color;
     }
 
@@ -4367,10 +4515,11 @@ static COLORREF ConvertGdiColor(COLORREF color) {
     Cheapest test first: the color test turns most calls away on its own, so
     the module ranges are only walked for the dark grays that may be
     converted. The caller's address is read in the hook and passed in; read in
-    here, it would be the hook's own address unless this was inlined.
+    here, it would be the hook's own address unless this was inlined. The
+    settings snapshot is the hook's, and the same one the conversion gets.
 */
-static bool ShouldConvertGdi(COLORREF color, void* caller) {
-    return CurrentSettings().gdiHook && ShouldConvert(GdiToDva(color)) &&
+static bool ShouldConvertGdi(const Settings& s, COLORREF color, void* caller) {
+    return s.gdiHook && ShouldConvertWith(s, GdiToDva(color)) &&
            !InContentScope() && IsAdobeUICaller(caller);
 }
 
@@ -4383,24 +4532,30 @@ CreatePen_t CreatePen_Original = nullptr;
 SetBkColor_t SetBkColor_Original = nullptr;
 
 HBRUSH WINAPI CreateSolidBrush_Hook(COLORREF color) {
-    if (ShouldConvertGdi(color, __builtin_return_address(0))) {
-        color = ConvertGdiColor(color);
+    const Settings& s = CurrentSettings();
+
+    if (ShouldConvertGdi(s, color, __builtin_return_address(0))) {
+        color = ConvertGdiColor(s, color);
     }
 
     return CreateSolidBrush_Original(color);
 }
 
 HPEN WINAPI CreatePen_Hook(int style, int width, COLORREF color) {
-    if (ShouldConvertGdi(color, __builtin_return_address(0))) {
-        color = ConvertGdiColor(color);
+    const Settings& s = CurrentSettings();
+
+    if (ShouldConvertGdi(s, color, __builtin_return_address(0))) {
+        color = ConvertGdiColor(s, color);
     }
 
     return CreatePen_Original(style, width, color);
 }
 
 COLORREF WINAPI SetBkColor_Hook(HDC hdc, COLORREF color) {
-    if (ShouldConvertGdi(color, __builtin_return_address(0))) {
-        color = ConvertGdiColor(color);
+    const Settings& s = CurrentSettings();
+
+    if (ShouldConvertGdi(s, color, __builtin_return_address(0))) {
+        color = ConvertGdiColor(s, color);
     }
 
     return SetBkColor_Original(hdc, color);
@@ -4576,420 +4731,72 @@ static const NamedPalette kPalettes[] = {
 };
 
 /*
-    A custom theme is one JSON object in a single setting, so it can be shared
-    as text; the readme lists the keys. The text comes from other people, so it
-    is read strictly and within fixed bounds: JSON that does not parse is
-    rejected whole. Anything before the first brace or after the object, like a
-    code fence, is ignored, and unknown members are skipped however nested.
+    A custom theme is nine settings in one group, so each color gets its own
+    labelled field in Windhawk's settings and only ParseHexColor is needed to
+    validate it. Sharing a theme is Windhawk's own job: the Advanced tab
+    exports and imports a mod's whole settings as text.
+
+    present says the field had something in it, which is what tells an empty
+    field — the default for the three optional ones — from a typo.
 */
-constexpr size_t kMaxThemeLength = 16384;
-constexpr size_t kMaxThemeMembers = 64;
-constexpr int kMaxThemeDepth = 16;
+static bool ReadThemeColor(PCWSTR setting, COLORREF* color, bool* present) {
+    auto value = WindhawkUtils::StringSetting::make(setting);
+    PCWSTR text = value;
 
-struct JsonCursor {
-    const wchar_t* p;
-    const wchar_t* end;
-};
+    *present = text && *text;
 
-struct ThemeMember {
-    std::wstring key;
-    std::wstring value;
-    bool isString = false;
-    bool isNull = false;
-};
-
-static void SkipJsonSpace(JsonCursor& c) {
-    while (c.p < c.end &&
-           (*c.p == L' ' || *c.p == L'\t' || *c.p == L'\n' || *c.p == L'\r')) {
-        c.p++;
-    }
-}
-
-static int JsonHexDigit(wchar_t c) {
-    if (c >= L'0' && c <= L'9') {
-        return c - L'0';
-    }
-
-    if (c >= L'a' && c <= L'f') {
-        return c - L'a' + 10;
-    }
-
-    if (c >= L'A' && c <= L'F') {
-        return c - L'A' + 10;
-    }
-
-    return -1;
-}
-
-// A string at the cursor, unescaped into `out`, or only skipped when it is null.
-static bool ReadJsonString(JsonCursor& c, std::wstring* out) {
-    if (c.p >= c.end || *c.p != L'"') {
-        return false;
-    }
-
-    c.p++;
-
-    while (c.p < c.end) {
-        wchar_t ch = *c.p++;
-
-        if (ch == L'"') {
-            return true;
-        }
-
-        if (ch < 0x20) {
-            return false;  // a raw control character, which JSON does not allow
-        }
-
-        if (ch == L'\\') {
-            if (c.p >= c.end) {
-                return false;
-            }
-
-            wchar_t escape = *c.p++;
-
-            switch (escape) {
-                case L'"':
-                case L'\\':
-                case L'/':
-                    ch = escape;
-                    break;
-                case L'b':
-                    ch = L'\b';
-                    break;
-                case L'f':
-                    ch = L'\f';
-                    break;
-                case L'n':
-                    ch = L'\n';
-                    break;
-                case L'r':
-                    ch = L'\r';
-                    break;
-                case L't':
-                    ch = L'\t';
-                    break;
-                case L'u': {
-                    if (c.end - c.p < 4) {
-                        return false;
-                    }
-
-                    int code = 0;
-
-                    for (int k = 0; k < 4; k++) {
-                        int digit = JsonHexDigit(c.p[k]);
-
-                        if (digit < 0) {
-                            return false;
-                        }
-
-                        code = code * 16 + digit;
-                    }
-
-                    c.p += 4;
-                    ch = static_cast<wchar_t>(code);  // UTF-16, as the setting is
-                    break;
-                }
-                default:
-                    return false;
-            }
-        }
-
-        if (out) {
-            out->push_back(ch);
-        }
-    }
-
-    return false;  // unterminated
-}
-
-static bool SkipJsonValue(JsonCursor& c, int depth);
-
-static bool SkipJsonWord(JsonCursor& c, const wchar_t* word) {
-    size_t length = wcslen(word);
-
-    if (static_cast<size_t>(c.end - c.p) < length || wcsncmp(c.p, word, length) != 0) {
-        return false;
-    }
-
-    c.p += length;
-    return true;
-}
-
-static bool SkipJsonDigits(JsonCursor& c) {
-    const wchar_t* start = c.p;
-
-    while (c.p < c.end && *c.p >= L'0' && *c.p <= L'9') {
-        c.p++;
-    }
-
-    return c.p > start;
-}
-
-static bool SkipJsonNumber(JsonCursor& c) {
-    if (c.p < c.end && *c.p == L'-') {
-        c.p++;
-    }
-
-    if (!SkipJsonDigits(c)) {
-        return false;
-    }
-
-    if (c.p < c.end && *c.p == L'.') {
-        c.p++;
-
-        if (!SkipJsonDigits(c)) {
-            return false;
-        }
-    }
-
-    if (c.p < c.end && (*c.p == L'e' || *c.p == L'E')) {
-        c.p++;
-
-        if (c.p < c.end && (*c.p == L'+' || *c.p == L'-')) {
-            c.p++;
-        }
-
-        if (!SkipJsonDigits(c)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-// An object or an array, skipped whole; `depth` bounds how far it nests.
-static bool SkipJsonContainer(JsonCursor& c, int depth) {
-    if (depth > kMaxThemeDepth) {
-        return false;
-    }
-
-    bool object = *c.p == L'{';
-    wchar_t close = object ? L'}' : L']';
-
-    c.p++;
-    SkipJsonSpace(c);
-
-    if (c.p < c.end && *c.p == close) {
-        c.p++;
-        return true;
-    }
-
-    for (;;) {
-        if (object) {
-            if (!ReadJsonString(c, nullptr)) {
-                return false;
-            }
-
-            SkipJsonSpace(c);
-
-            if (c.p >= c.end || *c.p != L':') {
-                return false;
-            }
-
-            c.p++;
-        }
-
-        if (!SkipJsonValue(c, depth + 1)) {
-            return false;
-        }
-
-        SkipJsonSpace(c);
-
-        if (c.p >= c.end) {
-            return false;
-        }
-
-        if (*c.p == close) {
-            c.p++;
-            return true;
-        }
-
-        if (*c.p != L',') {
-            return false;
-        }
-
-        c.p++;
-        SkipJsonSpace(c);
-    }
-}
-
-static bool SkipJsonValue(JsonCursor& c, int depth) {
-    SkipJsonSpace(c);
-
-    if (c.p >= c.end) {
-        return false;
-    }
-
-    switch (*c.p) {
-        case L'"':
-            return ReadJsonString(c, nullptr);
-        case L'{':
-        case L'[':
-            return SkipJsonContainer(c, depth);
-        case L't':
-            return SkipJsonWord(c, L"true");
-        case L'f':
-            return SkipJsonWord(c, L"false");
-        case L'n':
-            return SkipJsonWord(c, L"null");
-        default:
-            return SkipJsonNumber(c);
-    }
-}
-
-/*
-    The members of the first object in `text`. False when it does not parse,
-    with `errorAt` the offset where reading stopped.
-*/
-static bool ReadThemeMembers(PCWSTR text, std::vector<ThemeMember>* members,
-                             size_t* errorAt) {
-    size_t length = wcsnlen(text, kMaxThemeLength + 1);
-    *errorAt = 0;
-
-    if (length > kMaxThemeLength) {
-        *errorAt = kMaxThemeLength;
-        return false;
-    }
-
-    const wchar_t* open = wcschr(text, L'{');
-
-    if (!open) {
-        return false;
-    }
-
-    JsonCursor c{open + 1, text + length};
-    SkipJsonSpace(c);
-
-    if (c.p < c.end && *c.p == L'}') {
-        return true;
-    }
-
-    for (;;) {
-        ThemeMember member;
-
-        bool ok = ReadJsonString(c, &member.key);
-
-        if (ok) {
-            SkipJsonSpace(c);
-            ok = c.p < c.end && *c.p == L':';
-        }
-
-        if (ok) {
-            c.p++;
-            SkipJsonSpace(c);
-
-            member.isString = c.p < c.end && *c.p == L'"';
-            member.isNull = c.p < c.end && *c.p == L'n';  // SkipJsonValue checks the rest
-            ok = member.isString ? ReadJsonString(c, &member.value)
-                                 : SkipJsonValue(c, 1);
-        }
-
-        if (ok && members->size() < kMaxThemeMembers) {
-            members->push_back(std::move(member));
-        }
-
-        if (ok) {
-            SkipJsonSpace(c);
-            ok = c.p < c.end && (*c.p == L'}' || *c.p == L',');
-        }
-
-        if (!ok) {
-            *errorAt = static_cast<size_t>(c.p - text);
-            return false;
-        }
-
-        if (*c.p++ == L'}') {
-            return true;
-        }
-
-        SkipJsonSpace(c);
-    }
-}
-
-// The last member named `key`, as JSON readers usually take it, case aside.
-static const ThemeMember* FindThemeMember(const std::vector<ThemeMember>& members,
-                                          PCWSTR key) {
-    const ThemeMember* found = nullptr;
-
-    for (const ThemeMember& member : members) {
-        if (_wcsicmp(member.key.c_str(), key) == 0) {
-            found = &member;
-        }
-    }
-
-    return found;
-}
-
-static bool ReadThemeColor(const ThemeMember* member, COLORREF* out) {
-    return member && member->isString && ParseHexColor(member->value.c_str(), out);
+    return *present && ParseHexColor(text, color);
 }
 
 /*
     The palette a custom theme describes. The six colors every surface needs
-    fall back to Onyx's one at a time, each logged; the optional ones have
+    fall back to Onyx's one at a time, each logged; the other three have
     defaults of their own.
 */
 static Palette LoadCustomTheme(const Palette& onyx) {
-    auto json = WindhawkUtils::StringSetting::make(L"customTheme");
-    PCWSTR text = json;
-
-    std::vector<ThemeMember> members;
-    size_t errorAt = 0;
-
-    if (!*text) {
-        Wh_Log(L"custom theme is empty; Onyx is used instead");
-        return onyx;
-    }
-
-    if (!ReadThemeMembers(text, &members, &errorAt)) {
-        bool curly = wcschr(text, L'“') || wcschr(text, L'”');
-
-        Wh_Log(L"custom theme is not valid JSON (it stops making sense at "
-               L"character %u)%s; Onyx is used instead",
-               static_cast<unsigned>(errorAt + 1),
-               curly ? L", and it has curly quotes where straight ones belong" : L"");
-        return onyx;
-    }
-
     Palette p = onyx;
 
     const struct {
-        PCWSTR key;
+        PCWSTR setting;
+        PCWSTR name;
         COLORREF* color;
     } kRequired[] = {
-        {L"base", &p.ramp[0]},   {L"panel", &p.ramp[1]},  {L"surface", &p.ramp[2]},
-        {L"raised", &p.ramp[3]}, {L"border", &p.ramp[4]}, {L"text", &p.text},
+        {L"customTheme.base", L"Base", &p.ramp[0]},
+        {L"customTheme.panel", L"Panel", &p.ramp[1]},
+        {L"customTheme.surface", L"Surface", &p.ramp[2]},
+        {L"customTheme.raised", L"Raised", &p.ramp[3]},
+        {L"customTheme.border", L"Border", &p.ramp[4]},
+        {L"customTheme.text", L"Text", &p.text},
     };
 
     for (const auto& field : kRequired) {
-        if (!ReadThemeColor(FindThemeMember(members, field.key), field.color)) {
-            Wh_Log(L"custom theme: \"%s\" is missing or not a #RRGGBB color; "
-                   L"Onyx's is used",
-                   field.key);
+        bool present = false;
+
+        if (!ReadThemeColor(field.setting, field.color, &present)) {
+            Wh_Log(L"custom theme: %s is %s; Onyx's is used", field.name,
+                   present ? L"not a #RRGGBB color" : L"empty");
         }
     }
 
     /*
-        Absent, empty or null takes the default without a word — the shipped
-        template lists every key, with "highlight": "" — while a value that is
-        there but unreadable is worth a line.
+        Left empty takes the default without a word — highlight ships that way
+        — while a value that is there but unreadable is worth a line.
     */
-    auto optional = [&](PCWSTR key, COLORREF* color) {
-        const ThemeMember* member = FindThemeMember(members, key);
+    auto optional = [](PCWSTR setting, PCWSTR name, COLORREF* color) {
+        bool present = false;
 
-        if (!member || member->isNull || (member->isString && member->value.empty())) {
-            return false;
-        }
-
-        if (ReadThemeColor(member, color)) {
+        if (ReadThemeColor(setting, color, &present)) {
             return true;
         }
 
-        Wh_Log(L"custom theme: \"%s\" is not a #RRGGBB color; left out", key);
+        if (present) {
+            Wh_Log(L"custom theme: %s is not a #RRGGBB color; left out", name);
+        }
+
         return false;
     };
 
-    if (!optional(L"accent", &p.accent)) {
+    if (!optional(L"customTheme.accent", L"Accent", &p.accent)) {
         p.accent = p.ramp[4];
     }
 
@@ -4998,24 +4805,14 @@ static Palette LoadCustomTheme(const Palette& onyx) {
         palettes put disabled text, and it always lies between the two, which
         Onyx's #777777 would not once a theme's text is darker than that.
     */
-    if (!optional(L"disabledText", &p.dimText)) {
+    if (!optional(L"customTheme.disabledText", L"Disabled text", &p.dimText)) {
         p.dimText = RGB((GetRValue(p.text) + GetRValue(p.ramp[1])) / 2,
                         (GetGValue(p.text) + GetGValue(p.ramp[1])) / 2,
                         (GetBValue(p.text) + GetBValue(p.ramp[1])) / 2);
     }
 
-    if (!optional(L"highlight", &p.highlight)) {
+    if (!optional(L"customTheme.highlight", L"Highlight", &p.highlight)) {
         p.highlight = CLR_INVALID;
-    }
-
-    const ThemeMember* name = FindThemeMember(members, L"name");
-    const ThemeMember* author = FindThemeMember(members, L"author");
-
-    if (name && name->isString && !name->value.empty()) {
-        bool by = author && author->isString && !author->value.empty();
-
-        Wh_Log(L"custom theme: %.64s%s%.64s", name->value.c_str(),
-               by ? L", by " : L"", by ? author->value.c_str() : L"");
     }
 
     return p;
@@ -5186,10 +4983,16 @@ BOOL Wh_ModInit() {
                L"loads its UI modules after this point will not be themed");
     }
 
-    // The UXP runtime reads the panels' stylesheets through these two.
-    FindUxpPluginsDir();
+    /*
+        The UXP runtime reads the panels' stylesheets through these two, and
+        they are the only hooks the mod puts on a path every file open in the
+        process takes. So unlike the rest, they go in only when "UXP panels"
+        is on as the mod loads — turning it on later needs Premiere restarted,
+        which that layer needs anyway, since a panel reads its stylesheet once.
+    */
+    if (kernelBase && CurrentSettings().uxpPanels) {
+        FindUxpPluginsDir();
 
-    if (kernelBase) {
         HookOrLog(reinterpret_cast<CreateFileW_t>(
                       GetProcAddress(kernelBase, "CreateFileW")),
                   CreateFileW_Hook, &CreateFileW_Original, L"kernelbase!CreateFileW");

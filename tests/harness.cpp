@@ -44,16 +44,49 @@ static void SetFakeInt(PCWSTR name, int value) {
 }
 
 static const wchar_t* g_fakePalette = L"onyx";
-static const wchar_t* g_fakeTheme = L"";
+
+struct FakeString {
+    const wchar_t* name;
+    const wchar_t* value;
+};
+
+// One entry per field of the customTheme group, under its full setting name.
+static FakeString g_fakeTheme[] = {
+    {L"customTheme.base", L""},         {L"customTheme.panel", L""},
+    {L"customTheme.surface", L""},      {L"customTheme.raised", L""},
+    {L"customTheme.border", L""},       {L"customTheme.text", L""},
+    {L"customTheme.accent", L""},       {L"customTheme.disabledText", L""},
+    {L"customTheme.highlight", L""},
+};
 
 static PCWSTR FakeGetStringSetting(PCWSTR name, ...) {
     if (wcscmp(name, L"palette") == 0) {
         return g_fakePalette;
     }
-    if (wcscmp(name, L"customTheme") == 0) {
-        return g_fakeTheme;
+
+    for (const FakeString& field : g_fakeTheme) {
+        if (wcscmp(field.name, name) == 0) {
+            return field.value;
+        }
     }
+
     return L"";
+}
+
+// By the bare key, without the "customTheme." the group's name adds.
+static void SetFakeTheme(const wchar_t* key, const wchar_t* value) {
+    for (FakeString& field : g_fakeTheme) {
+        if (wcscmp(field.name + wcslen(L"customTheme."), key) == 0) {
+            field.value = value;
+            return;
+        }
+    }
+}
+
+static void ClearFakeTheme() {
+    for (FakeString& field : g_fakeTheme) {
+        field.value = L"";
+    }
 }
 
 static void FakeFreeStringSetting(PCWSTR) {}
@@ -439,10 +472,11 @@ static void TestMenuThemes() {
 static void TestGdiProduced() {
     LoadSettings();
 
+    const Settings& s = CurrentSettings();
     COLORREF raw = RGB(0x30, 0x30, 0x30);
-    COLORREF once = ConvertGdiColor(raw);
+    COLORREF once = ConvertGdiColor(s, raw);
     CHECK(once != raw);
-    CHECK(ConvertGdiColor(once) == once);  // not converted a second time
+    CHECK(ConvertGdiColor(s, once) == once);  // not converted a second time
 
     // A colour a theme function produced, turned into a COLORREF.
     static DvaColorRGBA divider = Gray(0x3A);
@@ -452,7 +486,7 @@ static void TestGdiProduced() {
     COLORREF asGdi = RGB(static_cast<int>(themed->r * 255.0f + 0.5f),
                          static_cast<int>(themed->g * 255.0f + 0.5f),
                          static_cast<int>(themed->b * 255.0f + 0.5f));
-    CHECK(ConvertGdiColor(asGdi) == asGdi);
+    CHECK(ConvertGdiColor(s, asGdi) == asGdi);
 }
 
 static void TestKnownModules() {
@@ -465,6 +499,60 @@ static void TestKnownModules() {
     LONG after = g_moduleRangeCount;
     NoteKnownModules();
     CHECK(g_moduleRangeCount == after);  // deduplicated
+}
+
+/*
+    A dva module that unloads stops being recognized, and the per-thread cache
+    of the last hit goes with it — otherwise whatever the loader maps at that
+    base next would paint in the palette.
+*/
+static void TestModuleRangeUnload() {
+    const uintptr_t base = 0x500000000000;
+    void* inside = reinterpret_cast<void*>(base + 0x100);
+
+    AddModuleRange(base, base + 0x1000);
+    CHECK(IsAdobeUICaller(inside));
+    CHECK(IsAdobeUICaller(inside));  // again, now off the cached range
+
+    DropModuleRange(base);
+    CHECK(!IsAdobeUICaller(inside));
+
+    // Mapped again at the same base: the entry is revived, not duplicated.
+    LONG count = g_moduleRangeCount;
+    AddModuleRange(base, base + 0x2000);
+    CHECK(g_moduleRangeCount == count);
+    CHECK(IsAdobeUICaller(reinterpret_cast<void*>(base + 0x1800)));
+
+    DropModuleRange(base);
+    DropModuleRange(base);  // already gone
+    CHECK(!IsAdobeUICaller(inside));
+
+    // The same, through the loader notification the mod actually listens to.
+    wchar_t dva[] = L"dvaunittest.dll";
+    LdrUnicodeString name{};
+    name.buffer = dva;
+    name.length = static_cast<USHORT>(wcslen(dva) * sizeof(wchar_t));
+    name.maximumLength = name.length;
+
+    LdrDllLoadedData data{};
+    data.baseDllName = &name;
+    data.dllBase = reinterpret_cast<PVOID>(base);
+    data.sizeOfImage = 0x1000;
+
+    OnDllNotification(kLdrDllLoaded, &data, nullptr);
+    CHECK(IsAdobeUICaller(inside));
+
+    OnDllNotification(kLdrDllUnloaded, &data, nullptr);
+    CHECK(!IsAdobeUICaller(inside));
+
+    // A module that is not Adobe's is ignored, whichever way it goes.
+    wchar_t other[] = L"vendor.dll";
+    name.buffer = other;
+    name.length = static_cast<USHORT>(wcslen(other) * sizeof(wchar_t));
+    name.maximumLength = name.length;
+
+    OnDllNotification(kLdrDllLoaded, &data, nullptr);
+    CHECK(!IsAdobeUICaller(inside));
 }
 
 static HookCount InstallColorHooksFrom(std::vector<const char*> exports) {
@@ -605,29 +693,44 @@ static void TestMenuBarGate() {
 
 static void TestCustomDimText() {
     g_fakePalette = L"custom";
-    g_fakeTheme = L"{\"base\":\"#050505\",\"panel\":\"#101010\",\"surface\":\"#0E0E0E\","
-                  L"\"raised\":\"#161616\",\"border\":\"#242424\",\"text\":\"#404040\"}";
+    SetFakeTheme(L"base", L"#050505");
+    SetFakeTheme(L"panel", L"#101010");
+    SetFakeTheme(L"surface", L"#0E0E0E");
+    SetFakeTheme(L"raised", L"#161616");
+    SetFakeTheme(L"border", L"#242424");
+    SetFakeTheme(L"text", L"#404040");
     LoadSettings();
     CHECK(CurrentSettings().palette.text == RGB(0x40, 0x40, 0x40));
     CHECK(CurrentSettings().palette.dimText == RGB(0x28, 0x28, 0x28));
     CHECK(!CurrentSettings().highlight);  // no highlight in the theme: the blue stays
 
     g_fakePalette = L"onyx";
-    g_fakeTheme = L"";
+    ClearFakeTheme();
     LoadSettings();
 }
 
-static Palette ThemeFrom(const wchar_t* json, int* logs) {
+struct ThemeField {
+    const wchar_t* key;
+    const wchar_t* value;
+};
+
+// Every field not listed is left empty, as the settings ship it.
+static Palette ThemeFrom(std::initializer_list<ThemeField> fields, int* logs) {
     g_fakePalette = L"custom";
-    g_fakeTheme = json;
+    ClearFakeTheme();
+
+    for (const ThemeField& field : fields) {
+        SetFakeTheme(field.key, field.value);
+    }
+
     g_themeLogs = 0;
     LoadSettings();
     *logs = g_themeLogs;
     return CurrentSettings().palette;
 }
 
-// The default the settings block ships, read from the mod itself.
-static std::wstring DefaultTheme() {
+// The mod's own source, with the CRLFs dropped so lines can be matched.
+static std::string ModSource() {
     std::string path = __FILE__;
     path = path.substr(0, path.find_last_of("/\\") + 1) + "../premiere-pro-theme.wh.cpp";
     std::FILE* f = std::fopen(path.c_str(), "rb");
@@ -636,54 +739,134 @@ static std::wstring DefaultTheme() {
     if (f) {
         char buffer[4096];
         size_t n;
+
         while ((n = std::fread(buffer, 1, sizeof(buffer), f)) > 0) {
-            s.append(buffer, n);
+            for (size_t i = 0; i < n; i++) {
+                if (buffer[i] != '\r') {
+                    s.push_back(buffer[i]);
+                }
+            }
         }
+
         std::fclose(f);
     }
 
-    const std::string marker = "- customTheme: '";
-    size_t at = s.find(marker);
+    return s;
+}
+
+struct ShippedField {
+    std::wstring key;
+    std::wstring value;
+};
+
+/*
+    The defaults the settings block ships for the customTheme group, so the
+    block and the reader cannot drift apart: every "  - <key>: <value>" line
+    under it, with the $name and $description lines that follow skipped.
+*/
+static std::vector<ShippedField> ShippedTheme() {
+    std::string s = ModSource();
+    std::vector<ShippedField> fields;
+    size_t at = s.find("\n- customTheme:\n");
 
     if (at == std::string::npos) {
-        return {};
+        return fields;
     }
 
-    at += marker.size();
-    std::string json = s.substr(at, s.find('\'', at) - at);
-    return std::wstring(json.begin(), json.end());
+    size_t i = s.find('\n', at + 1) + 1;
+
+    while (i < s.size() && s.compare(i, 4, "  - ") == 0) {
+        size_t eol = s.find('\n', i);
+        size_t colon = s.find(':', i + 4);
+        std::string key = s.substr(i + 4, colon - (i + 4));
+        std::string value;
+        size_t quote = s.find('"', colon);
+
+        if (quote != std::string::npos && quote < eol) {
+            size_t close = s.find('"', quote + 1);
+            value = s.substr(quote + 1, close - quote - 1);
+        }
+
+        fields.push_back({std::wstring(key.begin(), key.end()),
+                          std::wstring(value.begin(), value.end())});
+
+        i = eol + 1;
+
+        while (i < s.size() && s.compare(i, 4, "    ") == 0) {
+            i = s.find('\n', i) + 1;
+        }
+    }
+
+    return fields;
+}
+
+// A top-level true/false default in the settings block.
+static bool ShippedFlag(const char* name) {
+    std::string s = ModSource();
+    std::string marker = std::string("\n- ") + name + ": ";
+    size_t at = s.find(marker);
+    CHECK(at != std::string::npos);
+    return s.compare(at + marker.size(), 4, "true") == 0;
+}
+
+static void TestShippedDefaults() {
+    /*
+        The UXP layer is the one whose effect only a restart undoes, so it has
+        to be the one the user turns on.
+    */
+    CHECK(!ShippedFlag("uxpPanels"));
+
+    // Every other layer is on.
+    for (const char* on : {"dvauiHook", "brushHook", "nativeDarkMode", "menuHook",
+                           "gdiHook", "highlight"}) {
+        CHECK(ShippedFlag(on));
+    }
 }
 
 static void TestCustomTheme() {
     const Palette onyx = kPalettes[0].colors;
     int logs = 0;
 
-    // The shipped default is Onyx, exactly...
-    std::wstring shipped = DefaultTheme();
-    CHECK(!shipped.empty());
-    Palette p = ThemeFrom(shipped.c_str(), &logs);
-    CHECK(std::memcmp(&p, &onyx, sizeof(Palette)) == 0);
-    CHECK(logs == 1);  // its name, with no author to add
+    // The block ships exactly the fields the reader knows...
+    std::vector<ShippedField> shipped = ShippedTheme();
+    CHECK(shipped.size() == 9);
 
-    // ...and lists every key the reader knows, so it is the template to edit.
-    std::vector<ThemeMember> members;
-    size_t errorAt = 0;
-    CHECK(ReadThemeMembers(shipped.c_str(), &members, &errorAt));
+    for (const wchar_t* key : {L"base", L"panel", L"surface", L"raised", L"border",
+                               L"text", L"accent", L"disabledText", L"highlight"}) {
+        bool found = false;
 
-    for (PCWSTR key : {L"name", L"author", L"base", L"panel", L"surface", L"raised",
-                       L"border", L"text", L"disabledText", L"accent", L"highlight"}) {
-        CHECK(FindThemeMember(members, key) != nullptr);
+        for (const ShippedField& field : shipped) {
+            found = found || field.key == key;
+        }
+
+        CHECK(found);
     }
 
-    // A full theme, with what a Discord paste brings along around it.
-    p = ThemeFrom(
-        L"here it is:\n```json\n{\n  \"name\": \"Midnight \\u2728\", \"author\": \"someone\",\n"
-        L"  \"base\": \"#05060A\", \"panel\": \"#0A0C14\", \"surface\": \"#10131F\",\n"
-        L"  \"raised\": \"#181C2C\", \"border\": \"#2A3048\", \"text\": \"#E6E9F5\",\n"
-        L"  \"accent\": \"#3A4270\", \"disabledText\": \"#6B7090\", \"highlight\": \"4F7BFF\",\n"
-        L"  \"version\": 2, \"extra\": {\"nested\": [1, -2.5e3, true, null, {\"a\": \"}\"}]}\n"
-        L"}\n```\nenjoy :}",
-        &logs);
+    // ...and those defaults are Onyx, exactly, without a word in the log.
+    g_fakePalette = L"custom";
+    ClearFakeTheme();
+
+    for (const ShippedField& field : shipped) {
+        SetFakeTheme(field.key.c_str(), field.value.c_str());
+    }
+
+    g_themeLogs = 0;
+    LoadSettings();
+    Palette p = CurrentSettings().palette;
+    CHECK(std::memcmp(&p, &onyx, sizeof(Palette)) == 0);
+    CHECK(g_themeLogs == 0);
+
+    // A full theme, highlight included; the leading # is optional.
+    p = ThemeFrom({{L"base", L"#05060A"},
+                   {L"panel", L"#0A0C14"},
+                   {L"surface", L"#10131F"},
+                   {L"raised", L"#181C2C"},
+                   {L"border", L"#2A3048"},
+                   {L"text", L"#E6E9F5"},
+                   {L"accent", L"#3A4270"},
+                   {L"disabledText", L"#6B7090"},
+                   {L"highlight", L"4F7BFF"}},
+                  &logs);
     CHECK(p.ramp[0] == RGB(0x05, 0x06, 0x0A));
     CHECK(p.ramp[1] == RGB(0x0A, 0x0C, 0x14));
     CHECK(p.ramp[2] == RGB(0x10, 0x13, 0x1F));
@@ -694,23 +877,29 @@ static void TestCustomTheme() {
     CHECK(p.dimText == RGB(0x6B, 0x70, 0x90));
     CHECK(p.highlight == RGB(0x4F, 0x7B, 0xFF));
     CHECK(CurrentSettings().highlight);
-    CHECK(logs == 1);  // only the name line
+    CHECK(logs == 0);
 
-    // Optional members left out, and keys in another case.
-    p = ThemeFrom(L"{\"Base\":\"#000000\",\"PANEL\":\"#101010\",\"surface\":\"#202020\","
-                  L"\"raised\":\"#303030\",\"border\":\"#404040\",\"text\":\"#F0F0F0\"}",
+    // The three optional fields left empty: their defaults, without a word.
+    p = ThemeFrom({{L"base", L"#000000"},
+                   {L"panel", L"#101010"},
+                   {L"surface", L"#202020"},
+                   {L"raised", L"#303030"},
+                   {L"border", L"#404040"},
+                   {L"text", L"#F0F0F0"}},
                   &logs);
-    CHECK(p.ramp[0] == RGB(0, 0, 0));
-    CHECK(p.ramp[1] == RGB(0x10, 0x10, 0x10));
-    CHECK(p.accent == RGB(0x40, 0x40, 0x40));      // the border
-    CHECK(p.dimText == RGB(0x80, 0x80, 0x80));     // halfway from text to panel
+    CHECK(p.accent == RGB(0x40, 0x40, 0x40));   // the border
+    CHECK(p.dimText == RGB(0x80, 0x80, 0x80));  // halfway from text to panel
     CHECK(p.highlight == CLR_INVALID);
     CHECK(!CurrentSettings().highlight);
     CHECK(logs == 0);
 
-    // A required color missing or unreadable falls back to Onyx's, one at a time.
-    p = ThemeFrom(L"{\"base\":\"#000000\",\"panel\":\"red\",\"surface\":7,"
-                  L"\"raised\":\"#303030\",\"border\":\"#404040\",\"text\":\"#F0F0F0\"}",
+    // A required color left empty or unreadable falls back to Onyx's, one at a time.
+    p = ThemeFrom({{L"base", L"#000000"},
+                   {L"panel", L"red"},
+                   {L"surface", L""},
+                   {L"raised", L"#303030"},
+                   {L"border", L"#404040"},
+                   {L"text", L"#F0F0F0"}},
                   &logs);
     CHECK(p.ramp[0] == RGB(0, 0, 0));
     CHECK(p.ramp[1] == onyx.ramp[1]);
@@ -718,82 +907,33 @@ static void TestCustomTheme() {
     CHECK(p.ramp[3] == RGB(0x30, 0x30, 0x30));
     CHECK(logs == 2);
 
-    // An optional one present but unreadable is logged and left out.
-    p = ThemeFrom(L"{\"base\":\"#000000\",\"panel\":\"#101010\",\"surface\":\"#202020\","
-                  L"\"raised\":\"#303030\",\"border\":\"#404040\",\"text\":\"#F0F0F0\","
-                  L"\"accent\":\"#12345\"}",
+    // An optional one filled in but unreadable is logged and left out.
+    p = ThemeFrom({{L"base", L"#000000"},
+                   {L"panel", L"#101010"},
+                   {L"surface", L"#202020"},
+                   {L"raised", L"#303030"},
+                   {L"border", L"#404040"},
+                   {L"text", L"#F0F0F0"},
+                   {L"accent", L"#12345"}},
                   &logs);
     CHECK(p.accent == RGB(0x40, 0x40, 0x40));
     CHECK(logs == 1);
 
-    // Left empty or null on purpose: the defaults, without a word.
-    p = ThemeFrom(L"{\"base\":\"#000000\",\"panel\":\"#101010\",\"surface\":\"#202020\","
-                  L"\"raised\":\"#303030\",\"border\":\"#404040\",\"text\":\"#F0F0F0\","
-                  L"\"accent\":\"\",\"disabledText\":null,\"highlight\":\"\","
-                  L"\"name\":\"\",\"author\":\"\"}",
-                  &logs);
-    CHECK(p.accent == RGB(0x40, 0x40, 0x40));
-    CHECK(p.dimText == RGB(0x80, 0x80, 0x80));
+    /*
+        Every field empty: Onyx, one line per required color, and an accent
+        that follows the border rather than Onyx's own.
+    */
+    p = ThemeFrom({}, &logs);
+    CHECK(p.ramp[0] == onyx.ramp[0]);
+    CHECK(p.ramp[4] == onyx.ramp[4]);
+    CHECK(p.text == onyx.text);
+    CHECK(p.dimText == onyx.dimText);
+    CHECK(p.accent == onyx.ramp[4]);
     CHECK(p.highlight == CLR_INVALID);
-    CHECK(!CurrentSettings().highlight);
-    CHECK(logs == 0);
-
-    // A required color left empty is still missing.
-    p = ThemeFrom(L"{\"base\":\"\",\"panel\":\"#101010\",\"surface\":\"#202020\","
-                  L"\"raised\":\"#303030\",\"border\":\"#404040\",\"text\":\"#F0F0F0\"}",
-                  &logs);
-    CHECK(p.ramp[0] == onyx.ramp[0]);
-    CHECK(logs == 1);
-
-    // An empty object parses; every required color is reported.
-    p = ThemeFrom(L"{}", &logs);
-    CHECK(p.ramp[0] == onyx.ramp[0]);
     CHECK(logs == 6);
 
-    // Anything that is not valid JSON is rejected whole: Onyx, and one line.
-    const wchar_t* broken[] = {
-        L"",
-        L"no braces at all",
-        L"{\"base\":\"#000000\",}",                 // trailing comma
-        L"{\"base\":\"#000000\"",                   // unterminated object
-        L"{\"base\":\"#0000",                       // unterminated string
-        L"{base:\"#000000\"}",                      // unquoted key
-        L"{\"base\" \"#000000\"}",                  // no colon
-        L"{\"base\":\"\\x41\"}",                    // bad escape
-        L"{\"base\":\"\\u12G4\"}",                  // bad \u
-        L"{\u201Cbase\u201D:\u201C#000000\u201D}",  // curly quotes
-        L"{\"a\":tru}",
-        L"{\"a\":-}",
-        L"{\"a\":1.}",
-        L"{\"a\":[1 2]}",
-        L"{\"a\":\"line\nbreak\"}",                 // raw control character
-    };
-
-    for (const wchar_t* text : broken) {
-        p = ThemeFrom(text, &logs);
-        CHECK(std::memcmp(&p, &onyx, sizeof(Palette)) == 0);
-        CHECK(logs == 1);
-    }
-
-    // Nesting past the bound, and a paste past the length limit.
-    std::wstring deep = L"{\"a\":";
-    deep += std::wstring(200, L'[') + std::wstring(200, L']') + L"}";
-    p = ThemeFrom(deep.c_str(), &logs);
-    CHECK(std::memcmp(&p, &onyx, sizeof(Palette)) == 0);
-    CHECK(logs == 1);
-
-    std::wstring shallow = L"{\"a\":" + std::wstring(8, L'[') + std::wstring(8, L']') +
-                           L",\"base\":\"#010203\"}";
-    p = ThemeFrom(shallow.c_str(), &logs);
-    CHECK(p.ramp[0] == RGB(1, 2, 3));
-
-    std::wstring huge = L"{\"name\":\"" + std::wstring(20000, L'x') + L"\"}";
-    p = ThemeFrom(huge.c_str(), &logs);
-    CHECK(std::memcmp(&p, &onyx, sizeof(Palette)) == 0);
-    CHECK(logs == 1);
-
     g_fakePalette = L"onyx";
-    g_fakeTheme = L"";
+    ClearFakeTheme();
     LoadSettings();
 }
 
@@ -903,20 +1043,22 @@ static void TestGdiOrder() {
 
     void* adobe = reinterpret_cast<void*>(&TestKnownModules);  // the executable
 
-    CHECK(ShouldConvertGdi(RGB(0x30, 0x30, 0x30), adobe));
-    CHECK(!ShouldConvertGdi(RGB(0xE0, 0xE0, 0xE0), adobe));    // too light
-    CHECK(!ShouldConvertGdi(RGB(0x30, 0x10, 0x10), adobe));    // saturated
-    CHECK(!ShouldConvertGdi(RGB(0x30, 0x30, 0x30), nullptr));  // not Adobe
+    CHECK(ShouldConvertGdi(CurrentSettings(), RGB(0x30, 0x30, 0x30), adobe));
+
+    // Too light, saturated, and not from an Adobe module.
+    CHECK(!ShouldConvertGdi(CurrentSettings(), RGB(0xE0, 0xE0, 0xE0), adobe));
+    CHECK(!ShouldConvertGdi(CurrentSettings(), RGB(0x30, 0x10, 0x10), adobe));
+    CHECK(!ShouldConvertGdi(CurrentSettings(), RGB(0x30, 0x30, 0x30), nullptr));
 
     SetFakeInt(L"gdiHook", 0);
     LoadSettings();
-    CHECK(!ShouldConvertGdi(RGB(0x30, 0x30, 0x30), adobe));
+    CHECK(!ShouldConvertGdi(CurrentSettings(), RGB(0x30, 0x30, 0x30), adobe));
 
     SetFakeInt(L"gdiHook", 1);
     LoadSettings();
 }
 
-// The GDI path now goes through ConvertDvaColor; it must give what it gave.
+// The GDI path now goes through ConvertDvaColorWith; it must give what it gave.
 static void TestGdiMatchesOldFormula() {
     LoadSettings();
 
@@ -932,7 +1074,7 @@ static void TestGdiMatchesOldFormula() {
         COLORREF old = RGB(channel(GetRValue(target)), channel(GetGValue(target)),
                            channel(GetBValue(target)));
 
-        CHECK(ConvertGdiColor(RGB(level, level, level)) == old);
+        CHECK(ConvertGdiColor(CurrentSettings(), RGB(level, level, level)) == old);
     }
 }
 
@@ -1418,12 +1560,14 @@ int main() {
     TestMenuThemes();
     TestGdiProduced();
     TestKnownModules();
+    TestModuleRangeUnload();
     TestGdiOrder();
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
     TestMenuTextOptions();
     TestMenuBarGate();
     TestMenuBarTheme();
+    TestShippedDefaults();
     TestCustomDimText();
     TestCustomTheme();
     TestHighlight();

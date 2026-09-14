@@ -7,7 +7,9 @@ the Windhawk API stubbed out. They cover:
 - the content scope;
 - the palette highlight and its luminance matching;
 - the UXP stylesheet rewrite, and the file redirect on real temporary files;
-- the custom theme JSON reader, including malformed and oversized input;
+- the custom theme fields, checked against the defaults the settings block
+  itself ships;
+- the module ranges, including a dva module that unloads;
 - the menu theme bookkeeping;
 - how the renamed dvaui functions are counted.
 
