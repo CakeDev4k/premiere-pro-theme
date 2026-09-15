@@ -130,9 +130,9 @@ than leaving you to guess:
   `DisplaySurface.dll`. The mod recognizes those draws by the module they come
   from and by the color they carry, and changes that color — never the black
   behind the picture, which is what a clip with an alpha channel is composited
-  onto. It follows **Direct fills**, and goes in either from the device
-  Premiere creates or, when that switch is turned on later, from one of the
-  mod's own.
+  onto. It has its own switch, **Monitor band**, because it is the only layer
+  that hooks Direct3D, and goes in either from the device Premiere creates or,
+  when that switch is turned on later, from one of the mod's own.
 
 Both are written up in full, with the measurements, in the mod's readme.
 

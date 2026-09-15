@@ -22,7 +22,8 @@ struct FakeInt {
 
 static FakeInt g_fakeInts[] = {
     {L"strength", 100},      {L"ceiling", 28},  {L"dvauiHook", 1},
-    {L"brushHook", 1},       {L"nativeDarkMode", 1},
+    {L"brushHook", 1},       {L"monitorBand", 1},
+    {L"nativeDarkMode", 1},
     {L"menuHook", 1},        {L"gdiHook", 1},
     {L"uxpPanels", 1},       {L"highlight", 1},
 };
@@ -685,10 +686,15 @@ static float WrittenChannel(int i) {
 /*
     Which colors are the band's.
 
-    The gray is not a fixed value to compare against: stock it is #1D1D1D, but
-    the layers above have already been through it by the time it reaches
-    DisplaySurface, so under Onyx it arrives as #0E0E0E. What holds either way
-    is the shape — opaque, dark, neutral, and not black.
+    The gray is not a fixed value to compare against. Stock it is #1D1D1D, but
+    the band's color comes from the theme before DisplaySurface paints with it,
+    so with "Premiere interface" on it arrives converted — and under a palette
+    with a hue in the ramp, that conversion is not neutral.
+
+    That is what this round fixed. The test used to require neutrality, which
+    ten of the fifteen palettes could never satisfy; Miku, the one palette that
+    ships a band color of its own, was among them. The case below pins it: what
+    #1D1D1D becomes under Miku is #0E2128, and it has to be recognized.
 
     Not black is the part that carries the weight. Everything the monitor shows
     through the picture is black: the empty sequence frame over a gap in the
@@ -698,29 +704,78 @@ static float WrittenChannel(int i) {
 static void TestMonitorBandColor() {
     MonitorCommandState state{};
 
-    CHECK(!IsMonitorBandColor(state));  // nothing set yet
+    g_fakePalette = L"onyx";
+    ClearFakeTheme();
+    SetFakeInt(L"strength", 100);
+    SetFakeInt(L"ceiling", 28);
+    LoadSettings();
+
+    const Settings& onyx = CurrentSettings();
+
+    CHECK(!IsMonitorBandColor(onyx, state));  // nothing set yet
 
     SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
-    CHECK(IsMonitorBandColor(state));
+    CHECK(IsMonitorBandColor(onyx, state));
 
     SetRootColor(&state, 0x0E / 255.0f, 0x0E / 255.0f, 0x0E / 255.0f, 1.0f);
-    CHECK(IsMonitorBandColor(state));
+    CHECK(IsMonitorBandColor(onyx, state));
 
     // Black is the backing, never the band.
     SetRootColor(&state, 0.0f, 0.0f, 0.0f, 1.0f);
-    CHECK(!IsMonitorBandColor(state));
+    CHECK(!IsMonitorBandColor(onyx, state));
 
     // Light is content.
     SetRootColor(&state, 0.5f, 0.5f, 0.5f, 1.0f);
-    CHECK(!IsMonitorBandColor(state));
+    CHECK(!IsMonitorBandColor(onyx, state));
 
-    // So is anything with a hue: the band reaches here neutral either way.
+    // A hue Onyx could never have produced is somebody else's draw.
     SetRootColor(&state, 0x20 / 255.0f, 0x0C / 255.0f, 0x0C / 255.0f, 1.0f);
-    CHECK(!IsMonitorBandColor(state));
+    CHECK(!IsMonitorBandColor(onyx, state));
 
     // And anything the picture shows through.
     SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 0.5f);
-    CHECK(!IsMonitorBandColor(state));
+    CHECK(!IsMonitorBandColor(onyx, state));
+
+    /*
+        Every palette has to recognize its own conversion of the stock gray,
+        whatever hue that carries, and still keep black and a foreign hue out.
+    */
+    for (const NamedPalette& named : kPalettes) {
+        g_fakePalette = named.id;
+        LoadSettings();
+
+        const Settings& s = CurrentSettings();
+        float stock = 0x1D / 255.0f;
+        DvaColorRGBA in{stock, stock, stock, 1.0f};
+        DvaColorRGBA converted{};
+
+        CHECK(ConvertDvaColorWith(s, in, &converted));
+
+        SetRootColor(&state, converted.r, converted.g, converted.b, 1.0f);
+        CHECK(IsMonitorBandColor(s, state));
+
+        // The untouched gray too: "Premiere interface" can be off.
+        SetRootColor(&state, stock, stock, stock, 1.0f);
+        CHECK(IsMonitorBandColor(s, state));
+
+        SetRootColor(&state, 0.0f, 0.0f, 0.0f, 1.0f);
+        CHECK(!IsMonitorBandColor(s, state));
+
+        // A saturated color at the same brightness is not a ramp tone.
+        float gray = (converted.r + converted.g + converted.b) / 3.0f;
+        SetRootColor(&state, ClampFloat(gray * 3.0f, 0.0f, 1.0f), 0.0f, 0.0f, 1.0f);
+        CHECK(!IsMonitorBandColor(s, state));
+    }
+
+    // Miku's, spelled out: #1D1D1D becomes #0E2128, which is far from neutral.
+    g_fakePalette = L"miku";
+    LoadSettings();
+
+    SetRootColor(&state, 0x0E / 255.0f, 0x21 / 255.0f, 0x28 / 255.0f, 1.0f);
+    CHECK(IsMonitorBandColor(CurrentSettings(), state));
+
+    g_fakePalette = L"onyx";
+    LoadSettings();
 }
 
 /*
@@ -766,7 +821,7 @@ static void TestMonitorBandRecolor() {
     auto list = reinterpret_cast<ID3D12GraphicsCommandList*>(0x1000);
 
     g_fakePalette = L"onyx";
-    SetFakeInt(L"brushHook", 1);
+    SetFakeInt(L"monitorBand", 1);
     SetFakeInt(L"strength", 100);
     LoadSettings();
 
@@ -846,9 +901,15 @@ static void TestMonitorBandRecolor() {
     CHECK(!MonitorBandActive(CurrentSettings()));
 
     SetFakeInt(L"strength", 100);
-    SetFakeInt(L"brushHook", 0);
+    SetFakeInt(L"monitorBand", 0);
     LoadSettings();
     CHECK(!MonitorBandActive(CurrentSettings()));
+
+    // Direct fills is a different layer now, and does not govern this one.
+    SetFakeInt(L"monitorBand", 1);
+    SetFakeInt(L"brushHook", 0);
+    LoadSettings();
+    CHECK(MonitorBandActive(CurrentSettings()));
 
     SetFakeInt(L"brushHook", 1);
     LoadSettings();
@@ -868,6 +929,109 @@ static void TestMonitorBandRecolor() {
 
     MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
     LoadSettings();
+}
+
+/*
+    Only the exact float4 is taken for a color.
+
+    A larger block bound at root parameter 1 — a transform and a color, say —
+    would otherwise have its first four words rewritten, and a color assembled
+    from several smaller writes could mix words belonging to different draws.
+*/
+static void TestMonitorConstantShape() {
+    auto list = reinterpret_cast<ID3D12GraphicsCommandList*>(0x2000);
+    const float band[4] = {0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f};
+
+    g_fakePalette = L"onyx";
+    ClearFakeTheme();
+    SetFakeInt(L"monitorBand", 1);
+    SetFakeInt(L"strength", 100);
+    LoadSettings();
+
+    MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
+    SetDisplaySurfaceRange(0x400000, 0x500000);
+    auto fromDisplaySurface = reinterpret_cast<void*>(0x410000);
+
+    auto record = [&](UINT parameter, UINT count, const void* data, UINT offset) {
+        g_rootWrites = 0;
+        MonitorSetGraphicsRoot32BitConstants_Original(list, parameter, count,
+                                                      data, offset);
+        // What the hook body does, with the return address supplied.
+        if (parameter != 1 || !data || offset != 0 || count != 4) {
+            return false;
+        }
+        MonitorCommandState* state =
+            MonitorStateForColor(fromDisplaySurface, list);
+        CHECK(state != nullptr);
+        auto values = reinterpret_cast<const UINT*>(data);
+        for (int i = 0; i < 4; i++) {
+            state->root1Color[i] = values[i];
+        }
+        state->hasRoot1Color = true;
+        return true;
+    };
+
+    // Four words at offset zero is the shape; anything else is not.
+    CHECK(record(1, 4, band, 0));
+    CHECK(!record(1, 8, band, 0));   // a larger block
+    CHECK(!record(1, 4, band, 4));   // a color further into the block
+    CHECK(!record(1, 1, band, 3));   // one word of four
+    CHECK(!record(2, 4, band, 0));   // another root parameter
+
+    ForgetMonitorState(list);
+    SetDisplaySurfaceRange(0, 0);
+    LoadSettings();
+}
+
+/*
+    Reset ends a recording, and the slot goes with it.
+
+    Reset clears the list's viewport, scissor and root constants, so state kept
+    across it would describe work that is over — and a released list's address
+    can be handed to a new one, which must not inherit any of it.
+*/
+static void TestMonitorReset() {
+    auto list = reinterpret_cast<ID3D12GraphicsCommandList*>(0x3000);
+
+    MonitorCommandState* state = MonitorStateFor(list);
+    CHECK(state != nullptr);
+
+    state->hasViewport = true;
+    state->viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
+    state->hasScissor = true;
+    state->scissor = {0, 0, 1280, 720};
+    CHECK(IsFullMonitorState(*state));
+
+    CHECK(KnownMonitorState(list) == state);
+
+    ForgetMonitorState(list);
+    CHECK(KnownMonitorState(list) == nullptr);
+
+    // The same address again is a new recording, with nothing carried over.
+    MonitorCommandState* fresh = MonitorStateFor(list);
+    CHECK(fresh != nullptr);
+    CHECK(!fresh->hasViewport);
+    CHECK(!fresh->hasScissor);
+    CHECK(!fresh->hasRoot1Color);
+    CHECK(!IsFullMonitorState(*fresh));
+
+    ForgetMonitorState(list);
+
+    /*
+        And the slots are fixed, so more lists than there are slots costs the
+        oldest one rather than an allocation.
+    */
+    for (size_t i = 0; i < kMaxMonitorStates + 4; i++) {
+        auto many = reinterpret_cast<ID3D12GraphicsCommandList*>(0x4000 + i * 16);
+        CHECK(MonitorStateFor(many) != nullptr);
+    }
+
+    // The most recent kMaxMonitorStates are the ones still held.
+    for (size_t i = 4; i < kMaxMonitorStates + 4; i++) {
+        auto many = reinterpret_cast<ID3D12GraphicsCommandList*>(0x4000 + i * 16);
+        CHECK(KnownMonitorState(many) != nullptr);
+        ForgetMonitorState(many);
+    }
 }
 
 static HookCount InstallColorHooksFrom(std::vector<const char*> exports) {
@@ -1267,8 +1431,9 @@ static void TestShippedDefaults() {
     CHECK(!ShippedFlag("uxpPanels"));
 
     // Every other layer is on.
-    for (const char* on : {"dvauiHook", "brushHook", "nativeDarkMode", "menuHook",
-                           "gdiHook", "highlight"}) {
+    for (const char* on : {"dvauiHook", "brushHook", "monitorBand",
+                           "nativeDarkMode", "menuHook", "gdiHook",
+                           "highlight"}) {
         CHECK(ShippedFlag(on));
     }
 }
@@ -2101,6 +2266,8 @@ int main() {
     TestMonitorBandColor();
     TestMonitorFullSurface();
     TestMonitorBandRecolor();
+    TestMonitorConstantShape();
+    TestMonitorReset();
     TestGdiOrder();
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
