@@ -5,3 +5,6 @@
 
 # Diagnostic log from the development builds
 premiere-theme-colors.log
+
+# Scratch halves of the editing helper, never part of the mod.
+[on][0-9]*.txt
