@@ -6,7 +6,9 @@ the Windhawk API stubbed out. They cover:
 - the color table and its generations;
 - the content scope;
 - the palette highlight and its luminance matching;
-- the UXP stylesheet rewrite, and the file redirect on real temporary files;
+- the UXP stylesheet rewrite, including that a border past the ceiling is
+  recolored while text at the same value is not, and the file redirect on real
+  temporary files;
 - the custom theme fields, checked against the defaults the settings block
   itself ships, and the theme the mod writes out for sharing;
 - every built-in palette against the rules the readme states: a rising ramp,

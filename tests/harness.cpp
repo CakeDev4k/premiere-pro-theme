@@ -2154,6 +2154,82 @@ static std::string ReadAllFrom(HANDLE file) {
     return std::string(buffer, read);
 }
 
+/*
+    A border just above the ceiling is still a border.
+
+    Spectrum outlines its inputs #494949 — 28.6%, six tenths of a point past
+    the default ceiling — while their fill, #080808, is well under it. So the
+    box was themed and its outline was not, which on a search field is the
+    whole of the control. Brightness cannot separate the two: disabled text is
+    #4B4B4B, eight tenths away. The property separates them, and a stylesheet
+    is the one place in the mod that knows it.
+*/
+static COLORREF ConvertChrome8(COLORREF c) {
+    const Settings& s = CurrentSettings();
+    float gray = (GetRValue(c) + GetGValue(c) + GetBValue(c)) / 3.0f / 255.0f;
+    COLORREF target = PickTarget(s, gray);
+
+    auto channel = [&](BYTE from, BYTE to) {
+        float v = BlendWith(s.strength, from / 255.0f, to / 255.0f) * 255.0f + 0.5f;
+        return ClampInt(static_cast<int>(v), 0, 255);
+    };
+
+    return RGB(channel(GetRValue(c), GetRValue(target)),
+               channel(GetGValue(c), GetGValue(target)),
+               channel(GetBValue(c), GetBValue(target)));
+}
+
+static void TestStylesheetChromeCeiling() {
+    g_fakePalette = L"onyx";
+    SetFakeInt(L"ceiling", 28);
+    LoadSettings();
+
+    const std::string edge = Hex(ConvertChrome8(RGB(0x49, 0x49, 0x49)), false);
+
+    char css[] =
+        ".a{background-color:#080808;border-color:#494949;color:#c8c8c8}"
+        ".b:hover{border-color:#494949}.c{border-top-color:#494949}"
+        ".d{outline-color:#494949}.e{background:#494949}"
+        ".f{color:#494949}.g{-webkit-text-fill-color:#494949}"
+        ".h{fill:#494949}.i{border-color:#696969}";
+    const std::string original = css;
+
+    RecolorStylesheet(css, original.size());
+
+    const std::string s = css;
+    CHECK(s.size() == original.size());  // still every color at its own length
+
+    // Chrome, all of it, and all at the palette's edge tone.
+    for (const char* at : {".b:hover{border-color:", ".c{border-top-color:",
+                           ".d{outline-color:", ".e{background:"}) {
+        CHECK(s.find(std::string(at) + edge) != std::string::npos);
+    }
+
+    CHECK(s.find("border-color:" + edge + ";color:#c8c8c8") != std::string::npos);
+
+    // Text and icons at the very same value are left exactly as they were.
+    CHECK(s.find(".f{color:#494949}") != std::string::npos);
+    CHECK(s.find(".g{-webkit-text-fill-color:#494949}") != std::string::npos);
+    CHECK(s.find(".h{fill:#494949}") != std::string::npos);
+
+    // And the slack stops short of the next neutral Spectrum uses for chrome.
+    CHECK(s.find(".i{border-color:#696969}") != std::string::npos);
+
+    /*
+        A lower ceiling takes the border back out of reach, which is right: a
+        lower ceiling is the user asking for less of the interface to be
+        touched, not for borders to be exempt from that.
+    */
+    SetFakeInt(L"ceiling", 10);
+    LoadSettings();
+
+    char low[] = ".a{border-color:#494949}";
+    CHECK(RecolorStylesheet(low, sizeof(low) - 1) == 0);
+
+    SetFakeInt(L"ceiling", 28);
+    LoadSettings();
+}
+
 static void TestStylesheetRedirect() {
     g_fakePalette = L"onyx";
     LoadSettings();
@@ -2466,6 +2542,7 @@ int main() {
     TestThemeForSharing();
     TestHighlight();
     TestStylesheetRewrite();
+    TestStylesheetChromeCeiling();
     TestBundledStylesheetPath();
     TestStylesheetRedirect();
     TestProducedIsRecentOnly();

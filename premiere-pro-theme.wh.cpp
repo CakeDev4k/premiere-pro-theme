@@ -242,7 +242,11 @@ Each layer has its own switch in the settings:
 
 Saturated colors — clips, labels, warnings, and Premiere's blue unless the
 palette carries a highlight — pass through, and so does anything above the
-**brightness ceiling**: text, icons, and the `#4B4B4B` of disabled text.
+**brightness ceiling**: text, icons, and the `#4B4B4B` of disabled text. The
+UXP stylesheets are the exception, and only for borders and fills: a
+stylesheet says which property a color belongs to, so an input's outline is
+recolored a little past the ceiling while the disabled text at the very same
+value is not.
 Content is left alone whatever its color: the color picker's swatches, markers,
 Essential Graphics, and the parameter colors of Effect Controls, Lumetri and the
 monitors.
@@ -419,7 +423,8 @@ This mod is MIT as well.
     The highest brightness, in percent, still treated as background and
     darkened. Anything above passes through untouched. The default 28 sits just
     below the #4B4B4B that Spectrum uses for disabled text and dividers —
-    raising it starts erasing that text.
+    raising it starts erasing that text. In the UXP panels, borders and fills
+    get a little more room than this, since a stylesheet says which is which.
 - dvauiHook: true
   $name: Premiere interface
   $description: Intercepts the theme color functions in dvaui.dll. This is the layer that recolors panels, timeline and monitors.
@@ -2762,14 +2767,51 @@ static bool IsCssWordChar(char c) {
 }
 
 // What an 8-bit stylesheet color becomes, in place; false leaves it as written.
-static bool RecolorCssChannels(int rgb[3]) {
+/*
+    How far above the brightness ceiling a border or a fill is still chrome.
+
+    The ceiling is there to protect text: raise it and Spectrum's #4B4B4B
+    disabled text starts disappearing. But it turns away borders as well, and
+    Spectrum paints 106 of those #494949 in the panels this rewrites — 28.6%,
+    six tenths of a point above the default 28. Everything below was themed
+    and those were not, which on a search field is the whole of the control:
+    a stock gray box on a themed panel.
+
+    Brightness cannot tell the two apart — #494949 and #4B4B4B are eight
+    tenths of a point from each other. The property can, and a stylesheet is
+    the one place in the mod that knows it. The slack stops well short of the
+    next neutral Spectrum uses for chrome, #696969 at 41.2%, so a light
+    divider or a focus ring is still left alone.
+*/
+constexpr float kCssChromeSlack = 0.07f;
+
+// A neutral just above the ceiling, which only a border or a fill can be.
+static bool IsCssChromeTone(const Settings& s, const DvaColorRGBA& in) {
+    if (!IsSaneChannel(in.r) || !IsSaneChannel(in.g) || !IsSaneChannel(in.b) ||
+        !IsNeutral(in.r, in.g, in.b, 0.035f)) {
+        return false;
+    }
+
+    float gray = (in.r + in.g + in.b) / 3.0f;
+
+    return gray > s.ceiling && gray <= s.ceiling + kCssChromeSlack;
+}
+
+static bool RecolorCssChannels(int rgb[3], bool chrome) {
     DvaColorRGBA in{rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f};
     const Settings& s = CurrentSettings();
     COLORREF target = 0;
     int blue = -1;
 
     if (!PaletteTarget(s, in, &target, &blue)) {
-        return false;
+        if (!chrome || !IsCssChromeTone(s, in)) {
+            return false;
+        }
+
+        // Past the ceiling, PickTarget clamps to the lightest step — which is
+        // the tone the palette keeps for dividers and edges, and is what this
+        // is.
+        target = PickTarget(s, (in.r + in.g + in.b) / 3.0f);
     }
 
     auto channel = [&](float original, BYTE wanted) {
@@ -2792,7 +2834,7 @@ static bool RecolorCssChannels(int rgb[3]) {
 }
 
 // #rrggbb and #rrggbbaa, alpha kept. #rgb has no room for most results.
-static bool RecolorCssHex(char* text, size_t size, size_t hash) {
+static bool RecolorCssHex(char* text, size_t size, size_t hash, bool chrome) {
     size_t start = hash + 1;
     size_t end = start;
 
@@ -2831,7 +2873,7 @@ static bool RecolorCssHex(char* text, size_t size, size_t hash) {
                  CssHexDigit(text[start + 2 * k + 1]);
     }
 
-    if (!RecolorCssChannels(rgb)) {
+    if (!RecolorCssChannels(rgb, chrome)) {
         return false;
     }
 
@@ -2866,7 +2908,7 @@ static size_t WriteCssDecimal(char* out, int value) {
     digits are padded with spaces to the old length, and a color whose digits
     would not fit keeps its own.
 */
-static bool RecolorCssTriplet(char* text, size_t size, size_t from) {
+static bool RecolorCssTriplet(char* text, size_t size, size_t from, bool chrome) {
     size_t i = from;
     size_t first = 0;
     int rgb[3];
@@ -2910,7 +2952,7 @@ static bool RecolorCssTriplet(char* text, size_t size, size_t from) {
         rgb[k] = value;
     }
 
-    if (!RecolorCssChannels(rgb)) {
+    if (!RecolorCssChannels(rgb, chrome)) {
         return false;
     }
 
@@ -2937,6 +2979,46 @@ static bool RecolorCssTriplet(char* text, size_t size, size_t from) {
     return true;
 }
 
+/*
+    Whether the value at `at` belongs to a property that paints chrome rather
+    than text: a border, a fill, an outline.
+
+    The declaration is walked backwards to its colon and the property read off
+    in front of it, so `border-top-color` and `background-image` count and
+    `color`, `-webkit-text-fill-color` and `fill` — which is an icon, and a
+    darkened icon disappears — do not.
+*/
+static bool CssValueIsChrome(const char* text, size_t at) {
+    size_t colon = at;
+
+    while (colon > 0 && text[colon - 1] != ':' && text[colon - 1] != ';' &&
+           text[colon - 1] != '{' && text[colon - 1] != '}') {
+        colon--;
+    }
+
+    if (colon == 0 || text[colon - 1] != ':') {
+        return false;
+    }
+
+    size_t end = colon - 1;
+    size_t begin = end;
+
+    while (begin > 0 && IsCssWordChar(text[begin - 1])) {
+        begin--;
+    }
+
+    for (const char* prefix : {"background", "border", "outline"}) {
+        size_t length = strlen(prefix);
+
+        if (end - begin >= length &&
+            _strnicmp(text + begin, prefix, length) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool CssPrecededBy(const char* text, size_t at, const char* word) {
     size_t length = strlen(word);
 
@@ -2955,12 +3037,14 @@ static size_t RecolorStylesheet(char* text, size_t size) {
         bool recolored = false;
 
         if (text[i] == '#') {
-            recolored = RecolorCssHex(text, size, i);
+            recolored = RecolorCssHex(text, size, i, CssValueIsChrome(text, i));
         } else if (text[i] == ':' && CssPrecededBy(text, i, "-rgb")) {
-            recolored = RecolorCssTriplet(text, size, i + 1);
+            recolored =
+                RecolorCssTriplet(text, size, i + 1, CssValueIsChrome(text, i));
         } else if (text[i] == '(' &&
                    (CssPrecededBy(text, i, "rgb") || CssPrecededBy(text, i, "rgba"))) {
-            recolored = RecolorCssTriplet(text, size, i + 1);
+            recolored =
+                RecolorCssTriplet(text, size, i + 1, CssValueIsChrome(text, i));
         }
 
         changed += recolored ? 1 : 0;
@@ -5352,12 +5436,14 @@ struct MonitorCommandState {
     runs at thread exit, nothing is allocated inside a render hook, and
     nothing is left behind either.
 
-    Only DisplaySurface's own command lists are ever recorded, so in practice
-    one or two of these are ever in use. A list that is Reset gives its slot
-    back; past that, the oldest slot is taken in turn, so no set of lists can
+    A list gives its slot back when its recording ends, at Reset or at Close,
+    so what this has to hold is how many DisplaySurface records at once. Eight
+    was a guess and it was wrong: a real session logged the overflow below, so
+    the cap is four times that, and the line stays to say if even that is not
+    enough. Past it the oldest slot is taken in turn, so no set of lists can
     hold them all.
 */
-constexpr size_t kMaxMonitorStates = 8;
+constexpr size_t kMaxMonitorStates = 32;
 
 struct MonitorStateSlot {
     ID3D12GraphicsCommandList* commandList;
