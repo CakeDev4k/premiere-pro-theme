@@ -1032,6 +1032,53 @@ static void TestMonitorConstantShape() {
 }
 
 /*
+    The band is recolored by whichever of the three pieces arrives last.
+
+    It takes a viewport, a scissor and a color to decide, and only the order
+    DisplaySurface records in says which completes the set. All three hooks
+    try, so a build that set the color before the surface would still be
+    recolored instead of silently stopping.
+*/
+static void TestMonitorRecolorOrder() {
+    auto list = reinterpret_cast<ID3D12GraphicsCommandList*>(0x5000);
+
+    g_fakePalette = L"onyx";
+    ClearFakeTheme();
+    SetFakeInt(L"monitorBand", 1);
+    SetFakeInt(L"strength", 100);
+    LoadSettings();
+
+    MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
+    MonitorRSSetViewports_Original = FakeSetViewports;
+    MonitorRSSetScissorRects_Original = FakeSetScissors;
+    MonitorReset_Original = FakeReset;
+    MonitorClose_Original = FakeClose;
+
+    MonitorCommandState state{};
+
+    // The color first, which is the order the layer used to depend on not
+    // happening: nothing to recolor against yet.
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    g_rootWrites = 0;
+    CHECK(!RecolorBandConstants(list, &state));
+
+    // Then the viewport: still only half a surface.
+    state.hasViewport = true;
+    state.viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
+    CHECK(!RecolorBandConstants(list, &state));
+    CHECK(g_rootWrites == 0);
+
+    // The scissor completes it, and that is where the band changes.
+    state.hasScissor = true;
+    state.scissor = {0, 0, 1280, 720};
+    CHECK(RecolorBandConstants(list, &state));
+    CHECK(g_rootWrites == 1);
+
+    ForgetMonitorState(list);
+    LoadSettings();
+}
+
+/*
     A slot describes one recording, bounded at both ends.
 
     Reset begins one and clears the list's viewport, scissor and root
@@ -1458,6 +1505,49 @@ static void TestPaletteOptions() {
         }
 
         CHECK(known);
+    }
+}
+
+/*
+    Turning the layer on has to reach both ways in.
+
+    With "Monitor band" off at load the D3D12 export is not hooked, and the
+    probe declines until DisplaySurface is mapped. If a settings change only
+    retried the probe, turning the switch on while Premiere was still starting
+    would leave the layer off for the whole session with nothing in the log.
+*/
+static void TestSettingsChangedRetriesBothWaysIn() {
+    std::string s = ModSource();
+    size_t at = s.find("void Wh_ModSettingsChanged() {");
+    CHECK(at != std::string::npos);
+
+    std::string body = s.substr(at, s.find("\n}\n", at) - at);
+
+    CHECK(body.find("HookLoadedModules()") != std::string::npos);
+    CHECK(body.find("HookD3D12CreateDevice()") != std::string::npos);
+    CHECK(body.find("InstallMonitorBandFromProbe()") != std::string::npos);
+
+    /*
+        And all three hooks that record a piece of the decision have to try the
+        recolor, or the band depends on the order DisplaySurface records in.
+        The logic itself is TestMonitorRecolorOrder; this is only that every
+        hook reaches it.
+    */
+    for (const char* hook : {"MonitorRSSetViewports_Hook",
+                             "MonitorRSSetScissorRects_Hook",
+                             "MonitorSetGraphicsRoot32BitConstants_Hook"}) {
+        size_t body_at = s.find(std::string(hook) + "(ID3D12GraphicsCommandList");
+        CHECK(body_at != std::string::npos);
+
+        // The definition, not the forward declaration above it.
+        size_t open_brace = s.find('{', body_at);
+        size_t close = s.find("\n}\n", body_at);
+        CHECK(open_brace != std::string::npos);
+        CHECK(close != std::string::npos);
+
+        std::string text = s.substr(open_brace, close - open_brace);
+        CHECK(text.find("RecolorBandConstants(commandList, state)") !=
+              std::string::npos);
     }
 }
 
@@ -2267,7 +2357,16 @@ static void TestOpenThemeDataEx() {
     OpenThemeDataEx_Original = nullptr;
 }
 
-static void TestMessageOnlyWindows() {
+/*
+    Which windows the frame work is spent on.
+
+    Only a top-level window with a frame to color. A message-only window never
+    shows; a bare popup — which is what a menu, a tooltip and a combo dropdown
+    are, and Premiere makes them constantly — has no caption, so setting
+    caption colors on it is four round trips to DWM and a locked insert for
+    nothing.
+*/
+static void TestFramedWindowsOnly() {
     CreateWindowExW_Original = CreateWindowExW;
     g_themedWindows.clear();
 
@@ -2275,12 +2374,27 @@ static void TestMessageOnlyWindows() {
                                        nullptr, nullptr, nullptr);
     HWND popup = CreateWindowExW_Hook(0, L"STATIC", L"", WS_POPUP, 0, 0, 10, 10,
                                       nullptr, nullptr, nullptr, nullptr);
+    HWND child = CreateWindowExW_Hook(0, L"STATIC", L"", WS_CHILD, 0, 0, 10, 10,
+                                      helper, nullptr, nullptr, nullptr);
+    HWND framed = CreateWindowExW_Hook(0, L"STATIC", L"", WS_POPUP | WS_CAPTION, 0, 0,
+                                       10, 10, nullptr, nullptr, nullptr, nullptr);
+    HWND sizing = CreateWindowExW_Hook(0, L"STATIC", L"", WS_POPUP | WS_THICKFRAME, 0,
+                                       0, 10, 10, nullptr, nullptr, nullptr, nullptr);
 
     CHECK(helper && g_themedWindows.count(helper) == 0);  // never shows
-    CHECK(popup && g_themedWindows.count(popup) == 1);
+    CHECK(popup && g_themedWindows.count(popup) == 0);    // no frame to color
+    CHECK(child && g_themedWindows.count(child) == 0);    // not top level
 
-    DestroyWindow(helper);
-    DestroyWindow(popup);
+    CHECK(framed && g_themedWindows.count(framed) == 1);
+    CHECK(g_themedWindows[framed] & kThemedFrame);
+
+    CHECK(sizing && g_themedWindows.count(sizing) == 1);
+    CHECK(g_themedWindows[sizing] & kThemedFrame);
+
+    for (HWND hwnd : {helper, popup, child, framed, sizing}) {
+        DestroyWindow(hwnd);
+    }
+
     g_themedWindows.clear();
     CreateWindowExW_Original = nullptr;
 }
@@ -2335,6 +2449,8 @@ int main() {
     TestMonitorBandRecolor();
     TestMonitorConstantShape();
     TestMonitorReset();
+    TestMonitorRecolorOrder();
+    TestSettingsChangedRetriesBothWaysIn();
     TestGdiOrder();
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
@@ -2355,7 +2471,7 @@ int main() {
     TestProducedIsRecentOnly();
     TestExplorerThemeClasses();
     TestOpenThemeDataEx();
-    TestMessageOnlyWindows();
+    TestFramedWindowsOnly();
     TestSlotSaturation();
 
     if (g_failures) {

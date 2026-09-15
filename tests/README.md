@@ -14,13 +14,15 @@ the Windhawk API stubbed out. They cover:
 - that the palette list in the settings block, the palette tables in the mod's
   readme, and the palettes in the code are all the same set;
 - the module ranges, including a dva module that unloads;
+- which windows the frame work is spent on: top level, and with a frame;
 - the monitor band: the DisplaySurface range, which colors are the band's —
   held against every palette's own conversion of Premiere's gray, not just the
   neutral ones — what counts as a full-surface draw, that only the exact float4
   is taken for a color, that a recording's state does not outlive it, that a
-  partial install of the layer's hooks stops it acting at all, and that
-  recoloring rewrites the band's own color while leaving the black behind the
-  picture untouched;
+  partial install of the layer's hooks stops it acting at all, that the recolor
+  does not depend on the order DisplaySurface records in, and that recoloring
+  rewrites the band's own color while leaving the black behind the picture
+  untouched;
 - the menu theme bookkeeping;
 - how the renamed dvaui functions are counted.
 
