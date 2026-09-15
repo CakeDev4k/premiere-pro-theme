@@ -234,9 +234,9 @@ Each layer has its own switch in the settings:
 - **GDI surfaces** — brushes, pens and text backgrounds created by Premiere's
   own modules.
 - **UXP panels** — the Text panel, Import, Export, Quick Export, Progress,
-  Preset Manager and the Home screen, which Premiere draws from stylesheets of
-  their own. Off by default, because those panels only follow it across a
-  restart.
+  Preset Manager and the Home screen, which Premiere draws from stylesheets and
+  design tokens of their own. Off by default, because those panels only follow
+  it across a restart.
 - **Palette highlight** — Premiere's blue, on the palettes that carry a
   highlight.
 
@@ -276,11 +276,25 @@ mod's process **exclusion** list and this one takes over.
 ## Known limitations
 
 **UXP panels change on restart**, which is why they are off by default.
-Premiere reads their stylesheets once, when a panel loads, and the mod recolors
-that read — a temporary copy, deleted as soon as it is closed; nothing on disk
+Premiere reads their files once, when a panel loads, and the mod recolors that
+read — a temporary copy, deleted as soon as it is closed; nothing on disk
 changes. So turning the switch on, a palette switch, and turning it back off or
 disabling the mod all show on those panels after Premiere restarts. Frame.io
 and Adobe Stock carry no Spectrum grays and keep their own look.
+
+A panel keeps its colors twice, and both copies have to be recolored. The
+stylesheet is one. The other is a table of design tokens in the panel's own
+script, which its components read and set as inline styles — and an inline
+style beats every rule a stylesheet can state. The search field in the Text
+panel is one of those: its fill comes from
+`"background-color":"rgb(37, 37, 37)"` in `main.js`, and no amount of
+recoloring `main.css` reaches it.
+
+So the mod recolors that shape too, and only that shape: a `<name>-color` key
+whose value is an `rgb()` string. It does not go looking for hex colors in a
+script the way it does in a stylesheet — the icons in the same file are hex,
+and an icon has to stay an icon — and it rewrites the digits inside the quotes
+at their own length, so the script parses exactly as it did.
 
 **The band around the video is drawn on the GPU.** Zoomed out, the monitors
 paint the area around the picture outside every layer above: Premiere lays
@@ -456,7 +470,8 @@ This mod is MIT as well.
   $name: UXP panels
   $description: >-
     The Text panel, Import, Export, Quick Export, Progress, Preset Manager and
-    the Home screen, which Premiere draws from stylesheets of their own. Off by
+    the Home screen, which Premiere draws from stylesheets and design tokens of
+    their own. Off by
     default because those are read once, when a panel loads: this switch, a
     palette change and disabling the mod all show there only after Premiere
     restarts.
@@ -2707,15 +2722,35 @@ static void FindUxpPluginsDir() {
     A .css file under Premiere's own UXP\plugins folder. `relative` receives
     the part after that folder, for the log.
 */
-static bool IsBundledStylesheet(LPCWSTR path, LPCWSTR* relative) {
+/*
+    The two halves of a UXP plugin that carry its colors.
+
+    The stylesheet is the obvious one. The script is not, and it is where the
+    panels keep the design tokens their own components read — see
+    RecolorTokenTable.
+*/
+enum class BundledFile {
+    None,
+    Stylesheet,
+    Script,
+};
+
+// A .css or .js file under Premiere's own UXP\plugins folder. `relative`
+// receives the part after that folder, for the log.
+static BundledFile BundledFileKind(LPCWSTR path, LPCWSTR* relative) {
     if (!path || !g_uxpPluginsDirLength) {
-        return false;
+        return BundledFile::None;
     }
 
     size_t length = wcslen(path);
+    BundledFile kind = BundledFile::None;
 
-    if (length < 4 || _wcsicmp(path + length - 4, L".css") != 0) {
-        return false;
+    if (length >= 4 && _wcsicmp(path + length - 4, L".css") == 0) {
+        kind = BundledFile::Stylesheet;
+    } else if (length >= 3 && _wcsicmp(path + length - 3, L".js") == 0) {
+        kind = BundledFile::Script;
+    } else {
+        return BundledFile::None;
     }
 
     if (wcsncmp(path, L"\\\\?\\", 4) == 0) {
@@ -2724,25 +2759,25 @@ static bool IsBundledStylesheet(LPCWSTR path, LPCWSTR* relative) {
     }
 
     if (length <= g_uxpPluginsDirLength) {
-        return false;
+        return BundledFile::None;
     }
 
     for (size_t i = 0; i < g_uxpPluginsDirLength; i++) {
         if (FoldPathChar(path[i]) != g_uxpPluginsDir[i]) {
-            return false;
+            return BundledFile::None;
         }
     }
 
-    // A path that climbs back out of the folder is not one of its stylesheets.
+    // A path that climbs back out of the folder is not one of its files.
     if (wcsstr(path + g_uxpPluginsDirLength, L"..")) {
-        return false;
+        return BundledFile::None;
     }
 
     if (relative) {
         *relative = path + g_uxpPluginsDirLength;
     }
 
-    return true;
+    return kind;
 }
 
 static int CssHexDigit(char c) {
@@ -3030,6 +3065,63 @@ static bool CssPrecededBy(const char* text, size_t at, const char* word) {
     length, and returns how many changed. A value taken from a variable, like
     rgb(var(--x)), changes where the variable is defined.
 */
+/*
+    Whether a design token's key paints text rather than chrome.
+
+    The keys are the same words a stylesheet uses — background-color,
+    border-color, track-color, tip-color, text-color — so the same rule
+    applies: everything but text is chrome, and chrome gets the slack above
+    the ceiling that an input's border needs.
+*/
+static bool CssTokenKeyIsText(const char* text, size_t at) {
+    size_t begin = at;
+
+    while (begin > 0 && IsCssWordChar(text[begin - 1])) {
+        begin--;
+    }
+
+    return at - begin >= 4 && _strnicmp(text + at - 4, "text", 4) == 0;
+}
+
+/*
+    The design tokens in a panel's own script.
+
+    A UXP panel keeps its colors twice. The stylesheet has them, and so does a
+    table in the script beside it, which the panel's components read and apply
+    as inline styles — and an inline style beats every rule a stylesheet can
+    state. Premiere's Text panel sets its search field from
+    `"background-color":"rgb(37, 37, 37)"` there, so recoloring main.css, which
+    the mod already did correctly, never reached it.
+
+    Only that one shape is touched: a `<name>-color` key whose value is an
+    rgb() string literal. In Premiere 2026's Text panel all 264 of them are
+    design tokens and nothing else in 1.7 MB of script has the shape — the
+    icon strokes in the same file are `"#231f20"`, which is not it, and this
+    deliberately does not go looking for hex colors the way a stylesheet does.
+    The digits are rewritten inside the quotes at their own length, so the
+    script parses exactly as it did.
+*/
+static size_t RecolorTokenTable(char* text, size_t size) {
+    constexpr char kKey[] = "-color\":\"rgb(";
+    constexpr size_t kKeyLength = sizeof(kKey) - 1;
+
+    size_t changed = 0;
+
+    for (size_t i = 0; i + kKeyLength < size; i++) {
+        // One byte turns away almost every position of a 1.7 MB script.
+        if (text[i] != kKey[0] || memcmp(text + i, kKey, kKeyLength) != 0) {
+            continue;
+        }
+
+        if (RecolorCssTriplet(text, size, i + kKeyLength,
+                              !CssTokenKeyIsText(text, i))) {
+            changed++;
+        }
+    }
+
+    return changed;
+}
+
 static size_t RecolorStylesheet(char* text, size_t size) {
     size_t changed = 0;
 
@@ -3224,9 +3316,9 @@ static HANDLE WriteTemporaryCopy(const std::vector<char>& bytes, DWORD access,
     the caller to open the file itself: when there is nothing to recolor, and
     when anything fails.
 */
-static HANDLE OpenThemedStylesheet(LPCWSTR path, LPCWSTR relative, DWORD access,
-                                   DWORD share, LPSECURITY_ATTRIBUTES security,
-                                   DWORD flags) {
+static HANDLE OpenThemedBundledFile(LPCWSTR path, LPCWSTR relative,
+                                    BundledFile kind, DWORD access, DWORD share,
+                                    LPSECURITY_ATTRIBUTES security, DWORD flags) {
     /*
         Both the read and the copy go through CreateFileW's trampoline, so the
         CreateFile2 path needs it too — the two are hooked separately, and a
@@ -3242,7 +3334,9 @@ static HANDLE OpenThemedStylesheet(LPCWSTR path, LPCWSTR relative, DWORD access,
         return INVALID_HANDLE_VALUE;
     }
 
-    size_t colors = RecolorStylesheet(bytes.data(), bytes.size());
+    size_t colors = kind == BundledFile::Script
+                        ? RecolorTokenTable(bytes.data(), bytes.size())
+                        : RecolorStylesheet(bytes.data(), bytes.size());
 
     if (!colors) {
         return INVALID_HANDLE_VALUE;
@@ -3254,7 +3348,7 @@ static HANDLE OpenThemedStylesheet(LPCWSTR path, LPCWSTR relative, DWORD access,
         DWORD error = GetLastError();
 
         if (Claim(&g_stylesheetFailureLogged)) {
-            Wh_Log(L"could not write a recolored stylesheet (%u); UXP panels "
+            Wh_Log(L"could not write a recolored UXP file (%u); those panels "
                    L"keep their own colors",
                    error);
         }
@@ -3263,8 +3357,9 @@ static HANDLE OpenThemedStylesheet(LPCWSTR path, LPCWSTR relative, DWORD access,
     }
 
     InterlockedIncrement(&g_stylesheetsRecolored);
-    Wh_Log(L"UXP stylesheet recolored: %s, %u colors", relative,
-           static_cast<unsigned>(colors));
+    Wh_Log(L"UXP %s recolored: %s, %u colors",
+           kind == BundledFile::Script ? L"design tokens" : L"stylesheet",
+           relative, static_cast<unsigned>(colors));
 
     // A successful open of an existing file reports no error.
     SetLastError(ERROR_SUCCESS);
@@ -3277,10 +3372,14 @@ HANDLE WINAPI CreateFileW_Hook(LPCWSTR path, DWORD access, DWORD share,
                                DWORD flags, HANDLE templateFile) {
     LPCWSTR relative = nullptr;
 
-    if (CurrentSettings().uxpPanels && IsPlainRead(access, disposition, flags) &&
-        IsBundledStylesheet(path, &relative)) {
-        HANDLE copy =
-            OpenThemedStylesheet(path, relative, access, share, security, flags);
+    BundledFile kind = CurrentSettings().uxpPanels &&
+                               IsPlainRead(access, disposition, flags)
+                           ? BundledFileKind(path, &relative)
+                           : BundledFile::None;
+
+    if (kind != BundledFile::None) {
+        HANDLE copy = OpenThemedBundledFile(path, relative, kind, access, share,
+                                            security, flags);
 
         if (copy != INVALID_HANDLE_VALUE) {
             return copy;
@@ -3303,10 +3402,14 @@ HANDLE WINAPI CreateFile2_Hook(LPCWSTR path, DWORD access, DWORD share,
                              : 0;
     LPCWSTR relative = nullptr;
 
-    if (CurrentSettings().uxpPanels && IsPlainRead(access, disposition, flags) &&
-        IsBundledStylesheet(path, &relative)) {
-        HANDLE copy = OpenThemedStylesheet(
-            path, relative, access, share,
+    BundledFile kind = CurrentSettings().uxpPanels &&
+                               IsPlainRead(access, disposition, flags)
+                           ? BundledFileKind(path, &relative)
+                           : BundledFile::None;
+
+    if (kind != BundledFile::None) {
+        HANDLE copy = OpenThemedBundledFile(
+            path, relative, kind, access, share,
             parameters ? parameters->lpSecurityAttributes : nullptr, flags);
 
         if (copy != INVALID_HANDLE_VALUE) {

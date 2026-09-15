@@ -90,7 +90,8 @@ covers all six:
 - **Win32** — the title bar, the `File / Edit / Clip` menu bar and the dropdown
   menus, none of which any theme reaches.
 - **UXP** — the Text panel, Import, Export and the Home screen, drawn from
-  stylesheets of their own; the mod recolors each one as Premiere reads it.
+  stylesheets and design tokens of their own; the mod recolors both as
+  Premiere reads them.
   Off by default: a panel reads its stylesheet once, so that layer only
   follows a change across a restart.
 - **D3D12** — the band around the picture in the Source and Program monitors,

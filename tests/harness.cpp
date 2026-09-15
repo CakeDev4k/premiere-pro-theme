@@ -2110,34 +2110,38 @@ static void TestBundledStylesheetPath() {
         L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026\\Adobe Premiere Pro.exe");
 
     LPCWSTR relative = nullptr;
-    CHECK(IsBundledStylesheet(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
+    CHECK(BundledFile::Stylesheet == BundledFileKind(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
                               L"\\UXP\\plugins\\com.adobe.dva.text\\static\\css\\main.css",
                               &relative));
     CHECK(relative && wcscmp(relative, L"com.adobe.dva.text\\static\\css\\main.css") == 0);
 
-    CHECK(IsBundledStylesheet(
+    CHECK(BundledFile::Stylesheet == BundledFileKind(
         L"c:/program files/adobe/adobe premiere pro 2026/uxp/plugins/p/main.CSS", nullptr));
-    CHECK(IsBundledStylesheet(L"\\\\?\\C:\\Program Files\\Adobe\\Adobe Premiere Pro "
+    CHECK(BundledFile::Stylesheet == BundledFileKind(L"\\\\?\\C:\\Program Files\\Adobe\\Adobe Premiere Pro "
                               L"2026\\UXP\\plugins\\p\\a.css",
                               nullptr));
 
-    CHECK(!IsBundledStylesheet(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
-                               L"\\UXP\\plugins\\p\\main.js",
-                               nullptr));
-    CHECK(!IsBundledStylesheet(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
+    // The panel's script is bundled too, and carries the design tokens.
+    CHECK(BundledFileKind(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
+                          L"\\UXP\\plugins\\p\\static\\js\\main.js",
+                          nullptr) == BundledFile::Script);
+    CHECK(BundledFileKind(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
+                          L"\\UXP\\plugins\\p\\a.json",
+                          nullptr) == BundledFile::None);
+    CHECK(BundledFile::None == BundledFileKind(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
                                L"\\UXP\\plugins2\\p\\a.css",
                                nullptr));
-    CHECK(!IsBundledStylesheet(L"C:\\Users\\me\\AppData\\Roaming\\Adobe\\UXP\\plugins"
+    CHECK(BundledFile::None == BundledFileKind(L"C:\\Users\\me\\AppData\\Roaming\\Adobe\\UXP\\plugins"
                                L"\\p\\a.css",
                                nullptr));
-    CHECK(!IsBundledStylesheet(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
+    CHECK(BundledFile::None == BundledFileKind(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
                                L"\\UXP\\plugins\\p\\..\\..\\..\\x.css",
                                nullptr));  // climbs back out
-    CHECK(!IsBundledStylesheet(nullptr, nullptr));
-    CHECK(!IsBundledStylesheet(L"a.css", nullptr));
+    CHECK(BundledFile::None == BundledFileKind(nullptr, nullptr));
+    CHECK(BundledFile::None == BundledFileKind(L"a.css", nullptr));
 
     g_uxpPluginsDirLength = 0;
-    CHECK(!IsBundledStylesheet(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
+    CHECK(BundledFile::None == BundledFileKind(L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026"
                                L"\\UXP\\plugins\\p\\a.css",
                                nullptr));
 }
@@ -2228,6 +2232,66 @@ static void TestStylesheetChromeCeiling() {
 
     SetFakeInt(L"ceiling", 28);
     LoadSettings();
+}
+
+/*
+    The design tokens in a panel's own script.
+
+    A UXP panel keeps its colors twice, and the copy in the script is the one
+    its components actually use: they read it and set it as an inline style,
+    which beats every rule a stylesheet can state. Premiere's Text panel sets
+    its search field from "background-color":"rgb(37, 37, 37)" there, so
+    recoloring main.css never reached it however right that recoloring was.
+
+    Only the token shape is touched, and nothing goes looking for hex colors
+    the way the stylesheet pass does — an icon stroke in the same script is
+    "#231f20", and it has to stay an icon.
+*/
+static void TestTokenTableRewrite() {
+    g_fakePalette = L"onyx";
+    SetFakeInt(L"ceiling", 28);
+    SetFakeInt(L"strength", 100);
+    LoadSettings();
+
+    const std::string field = Triplet(Convert8(RGB(37, 37, 37)), 10);
+    const std::string edge = Triplet(ConvertChrome8(RGB(74, 74, 74)), 10);
+
+    char js[] =
+        "textfield:{default:{states:{default:{\"background-color\":\"rgb(37, 37, 37)\","
+        "\"border-color\":\"rgb(74, 74, 74)\"},"
+        "disabled:{\"text-color\":\"rgb(74, 74, 74)\"}}},"
+        "icon:N.createElement(\"path\",{stroke:\"#231f20\"}),"
+        "loose:\"rgb(37, 37, 37)\",white:{\"background-color\":\"rgb(255, 255, 255)\"}";
+    const std::string original = js;
+
+    size_t n = RecolorTokenTable(js, original.size());
+    const std::string s = js;
+
+    CHECK(s.size() == original.size());  // the script still parses the same
+    CHECK(n == 2);
+
+    // The search field's own fill, and its border, which needs the chrome slack.
+    CHECK(s.find("\"background-color\":\"rgb(" + field + ")\"") != std::string::npos);
+    CHECK(s.find("\"border-color\":\"rgb(" + edge + ")\"") != std::string::npos);
+
+    /*
+        Text at the very value the border took is left alone: the slack past
+        the ceiling is for chrome, and a stylesheet and a token table draw the
+        line in the same place.
+    */
+    CHECK(s.find("\"text-color\":\"rgb(74, 74, 74)\"") != std::string::npos);
+
+    // And so is everything that is not a token: an icon stroke, a loose
+    // string, and a color above the ceiling.
+    CHECK(s.find("stroke:\"#231f20\"") != std::string::npos);
+    CHECK(s.find("loose:\"rgb(37, 37, 37)\"") != std::string::npos);
+    CHECK(s.find("\"rgb(255, 255, 255)\"") != std::string::npos);
+
+    // A stylesheet's own pass does not run on a script, and vice versa.
+    char both[] = ".a{color:#1e1e1e}\"border-color\":\"rgb(37, 37, 37)\"";
+    const std::string beforeBoth = both;
+    CHECK(RecolorTokenTable(both, beforeBoth.size()) == 1);
+    CHECK(std::string(both).find(".a{color:#1e1e1e}") != std::string::npos);
 }
 
 static void TestStylesheetRedirect() {
@@ -2543,6 +2607,7 @@ int main() {
     TestHighlight();
     TestStylesheetRewrite();
     TestStylesheetChromeCeiling();
+    TestTokenTableRewrite();
     TestBundledStylesheetPath();
     TestStylesheetRedirect();
     TestProducedIsRecentOnly();
