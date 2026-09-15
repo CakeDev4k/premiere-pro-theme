@@ -8,8 +8,15 @@ the Windhawk API stubbed out. They cover:
 - the palette highlight and its luminance matching;
 - the UXP stylesheet rewrite, and the file redirect on real temporary files;
 - the custom theme fields, checked against the defaults the settings block
-  itself ships;
+  itself ships, and the theme the mod writes out for sharing;
+- every built-in palette against the rules the readme states: a rising ramp,
+  text and accent that carry, and a highlight white can sit on;
+- that the palette list in the settings block, the palette tables in the mod's
+  readme, and the palettes in the code are all the same set;
 - the module ranges, including a dva module that unloads;
+- the monitor band: the DisplaySurface range, which colors are the band's,
+  what counts as a full-surface draw, and that recoloring rewrites the band's
+  own color while leaving the black behind the picture untouched;
 - the menu theme bookkeeping;
 - how the renamed dvaui functions are counted.
 

@@ -4,20 +4,29 @@ A [Windhawk](https://windhawk.net/) mod that recolors the whole Adobe Premiere
 Pro interface — panels, timeline, monitors, window frame and menu bar — far
 past what the Appearance brightness slider reaches.
 
-Fourteen palettes — four near-black, four tinted, four vivid and two that hold a
+Fifteen palettes — four near-black, four tinted, five vivid and two that hold a
 strong accent over near-black panels — plus a custom theme, one labelled field
-per color in the settings. Seven of the palettes also give Premiere's blue
-their own hue.
+per color in the settings, down to the band behind the video. A theme is a
+block of YAML in the settings' own text mode, so it can be pasted straight in.
+Eight of the palettes also give Premiere's blue a hue of their own.
 
 ## Screenshots
 
-The same project in each palette. First, Premiere without the mod:
+The same project, palette by palette. First, Premiere without the mod:
 
 ![Premiere Pro without the mod](images/stock.png)
 
 **Onyx** — the default: near black, and neutral:
 
 ![Onyx palette](images/onyx.png)
+
+**Abyss** — absolute black, for an OLED panel:
+
+![Abyss palette](images/abyss.png)
+
+**Contrast** — black panels with light dividers and pure white text:
+
+![Contrast palette](images/contrast.png)
 
 **Premiere** — the violet sampled from the app icon:
 
@@ -27,13 +36,33 @@ The same project in each palette. First, Premiere without the mod:
 
 ![Comfy palette](images/comfy.png)
 
-**Neon** — near black with magenta:
-
-![Neon palette](images/neon.png)
-
 **Glitch** — acid green with a magenta accent:
 
 ![Glitch palette](images/glitch.png)
+
+**Violet** — a purple interface, not just a purple accent:
+
+![Violet palette](images/violet.png)
+
+**Blossom** — dark rose, pastel in its text and border:
+
+![Blossom palette](images/blossom.png)
+
+**Ember** — near black under a strong orange:
+
+![Ember palette](images/ember.png)
+
+**Crimson** — near black under a strong red:
+
+![Crimson palette](images/crimson.png)
+
+**Amethyst** — neutral panels, the purple only on the edges:
+
+![Amethyst palette](images/amethyst.png)
+
+**Threshold** — `#050505`, `#FFFFFF` and `#DC2626`:
+
+![Threshold palette](images/threshold.png)
 
 ## Install
 
@@ -47,8 +76,8 @@ compile.
 
 ## What it does
 
-Premiere paints its interface through five different mechanisms, and the mod
-covers all five:
+Premiere paints its interface through six different mechanisms, and the mod
+covers all six:
 
 - **`dvaui.dll`** — Adobe's UI toolkit, which hands out the Spectrum gray ramp
   (`#1D1D1D`, `#262626`, `#303030`, `#4B4B4B`). Thirty-one color functions are
@@ -64,6 +93,9 @@ covers all five:
   stylesheets of their own; the mod recolors each one as Premiere reads it.
   Off by default: a panel reads its stylesheet once, so that layer only
   follows a change across a restart.
+- **D3D12** — the band around the picture in the Source and Program monitors,
+  which `DisplaySurface.dll` draws on the GPU, outside every layer above. A
+  custom theme can give that band a tone of its own.
 
 The full explanation of how each is found, what is deliberately left untouched,
 and why the palettes are the colors they are, is in the mod's own readme at the
@@ -87,20 +119,30 @@ work on any version. Native dark mode needs Windows 10 build 17763 or newer.
 
 ## Known limitations
 
-Two surfaces are only partly covered, and the mod says so rather than patching
-blind:
+Two surfaces need a word of their own, and the mod says so in its log rather
+than leaving you to guess:
 
 - **UXP panels follow a change after a restart**, which is why that layer ships
   off. The Text panel, Import, Export and the Home screen read their
   stylesheets once, when they load, so turning it on, a palette switch, or
   disabling the mod, shows there after Premiere restarts.
-- **The band around the video in the monitors**, with a tinted palette. Zoomed
-  out, the monitors paint the area around the picture a gray made from the red
-  channel of the panel color, through a path none of the mod's hooks reaches.
-  On the near-black palettes that is the panel color itself; on a tinted one it
-  reads as a neutral band.
+- **The band around the video in the monitors** is drawn on the GPU, by
+  `DisplaySurface.dll`. The mod recognizes those draws by the module they come
+  from and by the color they carry, and changes that color — never the black
+  behind the picture, which is what a clip with an alpha channel is composited
+  onto. It follows **Direct fills**, and goes in either from the device
+  Premiere creates or, when that switch is turned on later, from one of the
+  mod's own.
 
 Both are written up in full, with the measurements, in the mod's readme.
+
+## Questions, bugs and palettes
+
+Bug reports and palette suggestions are welcome on
+[Discord](https://discord.gg/m5kVMR8Vuu), where a Premiere build and a
+screenshot are usually all it takes to work one out.
+
+![Threshold on Discord](images/discord.png)
 
 ## Credits
 

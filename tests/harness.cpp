@@ -4,6 +4,7 @@
 
 #include <windhawk_api.h>
 
+#include <cctype>
 #include <cmath>
 #include <cstdarg>
 #include <cstddef>
@@ -56,7 +57,7 @@ static FakeString g_fakeTheme[] = {
     {L"customTheme.surface", L""},      {L"customTheme.raised", L""},
     {L"customTheme.border", L""},       {L"customTheme.text", L""},
     {L"customTheme.accent", L""},       {L"customTheme.disabledText", L""},
-    {L"customTheme.highlight", L""},
+    {L"customTheme.highlight", L""},    {L"customTheme.monitor", L""},
 };
 
 static PCWSTR FakeGetStringSetting(PCWSTR name, ...) {
@@ -101,11 +102,28 @@ static BOOL FakeSetFunctionHook(void*, void*, void**) {
 // Wh_Log calls that report a missing function, and the last one's label.
 static int g_absentLogs = 0;
 static const wchar_t* g_lastAbsent = nullptr;
-static int g_themeLogs = 0;  // lines about the custom theme
+static int g_themeLogs = 0;  // lines about something wrong with a field
+static int g_shareLogs = 0;  // the theme written out for sharing
+static wchar_t g_sharedLine[2048];
+static const wchar_t* g_lastShared = nullptr;
 
 static void FakeLog(PCWSTR format, ...) {
-    if (wcsncmp(format, L"custom theme", 12) == 0) {
+    // "custom theme: ..." is something wrong with a field; the line that
+    // starts "custom theme, to share" is the theme itself, written out.
+    if (wcsncmp(format, L"custom theme: ", 14) == 0) {
         g_themeLogs++;
+        return;
+    }
+
+    if (wcsncmp(format, L"custom theme, to share", 22) == 0) {
+        // The colors are what matters here, so the line is expanded.
+        va_list shared;
+        va_start(shared, format);
+        vswprintf(g_sharedLine, ARRAYSIZE(g_sharedLine), format, shared);
+        va_end(shared);
+
+        g_shareLogs++;
+        g_lastShared = g_sharedLine;
         return;
     }
 
@@ -385,6 +403,25 @@ static void TestNodeDraw() {
     SetFakeInt(L"brushHook", 1);
     SetFakeInt(L"gdiHook", 1);
     LoadSettings();
+
+    /*
+        A class decision keys on a vtable address, and that address belongs to
+        the module the vtable is in. Mapping or unmapping anything throws the
+        whole table away, so an address the loader hands to something else
+        cannot answer for what used to be there.
+    */
+    SeedClass(content, true);
+    NodeDraw_Hook<&UiDrawSelf_Original>(contentNode, nullptr, false, nullptr);
+    CHECK(g_drawSawScope);
+
+    const uintptr_t base = 0x520000000000;
+    AddModuleRange(base, base + 0x1000);  // bumps the module generation
+
+    // The seeded answer is gone, and the fake vtable resolves to nothing.
+    NodeDraw_Hook<&UiDrawSelf_Original>(contentNode, nullptr, false, nullptr);
+    CHECK(!g_drawSawScope);
+
+    DropModuleRange(base);
 }
 
 static void TestSafeMode() {
@@ -553,6 +590,284 @@ static void TestModuleRangeUnload() {
 
     OnDllNotification(kLdrDllLoaded, &data, nullptr);
     CHECK(!IsAdobeUICaller(inside));
+}
+
+/*
+    DisplaySurface is tracked apart from the Adobe UI set, and its range is
+    cleared on unload — the monitor band reads it from every D3D12 command
+    list in the process, so a stale range would scope that bookkeeping to
+    whatever is mapped there next.
+*/
+static void TestDisplaySurfaceRange() {
+    const uintptr_t base = 0x510000000000;
+    void* inside = reinterpret_cast<void*>(base + 0x100);
+
+    CHECK(!IsDisplaySurfaceCall(inside));
+
+    SetDisplaySurfaceRange(base, base + 0x60000);
+    CHECK(IsDisplaySurfaceCall(inside));
+    CHECK(!IsDisplaySurfaceCall(reinterpret_cast<void*>(base + 0x60000)));
+
+    CHECK(!IsDisplaySurfaceCall(reinterpret_cast<void*>(base - 1)));
+
+    SetDisplaySurfaceRange(0, 0);
+    CHECK(!IsDisplaySurfaceCall(inside));
+
+    // The same, through the loader notification.
+    wchar_t name[] = L"DisplaySurface.dll";
+    LdrUnicodeString unicodeName{};
+    unicodeName.buffer = name;
+    unicodeName.length = static_cast<USHORT>(wcslen(name) * sizeof(wchar_t));
+    unicodeName.maximumLength = unicodeName.length;
+
+    LdrDllLoadedData data{};
+    data.baseDllName = &unicodeName;
+    data.dllBase = reinterpret_cast<PVOID>(base);
+    data.sizeOfImage = 0x60000;
+
+    OnDllNotification(kLdrDllLoaded, &data, nullptr);
+    CHECK(IsDisplaySurfaceCall(inside));
+
+    // It is not Adobe UI: the GDI layer must not recolor what it paints.
+    CHECK(!IsAdobeUICaller(inside));
+
+    OnDllNotification(kLdrDllUnloaded, &data, nullptr);
+    CHECK(!IsDisplaySurfaceCall(inside));
+}
+
+// The float4 a monitor draw carries, as the raw words the caller passed.
+static void SetRootColor(MonitorCommandState* state, float r, float g, float b,
+                         float a) {
+    const float rgba[4] = {r, g, b, a};
+
+    for (int i = 0; i < 4; i++) {
+        std::memcpy(&state->root1Color[i], &rgba[i], sizeof(UINT));
+    }
+
+    state->hasRoot1Color = true;
+}
+
+static float RootColorChannel(const MonitorCommandState* state, int i) {
+    float value = 0.0f;
+    std::memcpy(&value, &state->root1Color[i], sizeof(value));
+    return value;
+}
+
+// What the mod wrote back, and how many times.
+static int g_rootWrites = 0;
+static UINT g_rootWritten[4];
+static UINT g_rootWrittenIndex = 0;
+static UINT g_rootWrittenCount = 0;
+
+static void STDMETHODCALLTYPE FakeSetRootConstants(ID3D12GraphicsCommandList*,
+                                                   UINT rootParameterIndex,
+                                                   UINT num32BitValuesToSet,
+                                                   const void* srcData,
+                                                   UINT destOffset) {
+    g_rootWrites++;
+    g_rootWrittenIndex = rootParameterIndex;
+    g_rootWrittenCount = num32BitValuesToSet;
+    (void)destOffset;
+
+    auto values = static_cast<const UINT*>(srcData);
+
+    for (UINT i = 0; i < num32BitValuesToSet && i < 4; i++) {
+        g_rootWritten[i] = values[i];
+    }
+}
+
+static float WrittenChannel(int i) {
+    float value = 0.0f;
+    std::memcpy(&value, &g_rootWritten[i], sizeof(value));
+    return value;
+}
+
+/*
+    Which colors are the band's.
+
+    The gray is not a fixed value to compare against: stock it is #1D1D1D, but
+    the layers above have already been through it by the time it reaches
+    DisplaySurface, so under Onyx it arrives as #0E0E0E. What holds either way
+    is the shape — opaque, dark, neutral, and not black.
+
+    Not black is the part that carries the weight. Everything the monitor shows
+    through the picture is black: the empty sequence frame over a gap in the
+    timeline, and the backing a clip with an alpha channel is composited onto.
+    Both were lost to earlier rules, and both are what this keeps.
+*/
+static void TestMonitorBandColor() {
+    MonitorCommandState state{};
+
+    CHECK(!IsMonitorBandColor(state));  // nothing set yet
+
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    CHECK(IsMonitorBandColor(state));
+
+    SetRootColor(&state, 0x0E / 255.0f, 0x0E / 255.0f, 0x0E / 255.0f, 1.0f);
+    CHECK(IsMonitorBandColor(state));
+
+    // Black is the backing, never the band.
+    SetRootColor(&state, 0.0f, 0.0f, 0.0f, 1.0f);
+    CHECK(!IsMonitorBandColor(state));
+
+    // Light is content.
+    SetRootColor(&state, 0.5f, 0.5f, 0.5f, 1.0f);
+    CHECK(!IsMonitorBandColor(state));
+
+    // So is anything with a hue: the band reaches here neutral either way.
+    SetRootColor(&state, 0x20 / 255.0f, 0x0C / 255.0f, 0x0C / 255.0f, 1.0f);
+    CHECK(!IsMonitorBandColor(state));
+
+    // And anything the picture shows through.
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 0.5f);
+    CHECK(!IsMonitorBandColor(state));
+}
+
+/*
+    Only a draw that covers the whole render target, which the band does and a
+    thumbnail or a scope does not.
+*/
+static void TestMonitorFullSurface() {
+    MonitorCommandState state{};
+
+    CHECK(!IsFullMonitorState(state));
+
+    state.hasViewport = true;
+    state.viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
+    CHECK(!IsFullMonitorState(state));  // no scissor yet
+
+    state.hasScissor = true;
+    state.scissor = {0, 0, 1280, 720};
+    CHECK(IsFullMonitorState(state));
+
+    // A sub-rectangle of the surface is somebody else's draw.
+    state.scissor = {0, 0, 640, 720};
+    CHECK(!IsFullMonitorState(state));
+
+    state.scissor = {0, 0, 1280, 720};
+    state.viewport.TopLeftX = 8.0f;
+    CHECK(!IsFullMonitorState(state));
+
+    // Too small to be a monitor.
+    state.viewport = {0.0f, 0.0f, 320.0f, 200.0f, 0.0f, 1.0f};
+    state.scissor = {0, 0, 320, 200};
+    CHECK(!IsFullMonitorState(state));
+}
+
+/*
+    The band changes color where its color is set, not where it is drawn.
+
+    The quads cover the sides of the picture and the clear shows between them,
+    which is the same black the picture is composited onto. So the clear is
+    left alone and the quads' own color is replaced on its way to the shader —
+    the only way the band can take the theme while the backing stays black.
+*/
+static void TestMonitorBandRecolor() {
+    auto list = reinterpret_cast<ID3D12GraphicsCommandList*>(0x1000);
+
+    g_fakePalette = L"onyx";
+    SetFakeInt(L"brushHook", 1);
+    SetFakeInt(L"strength", 100);
+    LoadSettings();
+
+    MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
+
+    MonitorCommandState state{};
+    state.hasViewport = true;
+    state.viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
+    state.hasScissor = true;
+    state.scissor = {0, 0, 1280, 720};
+
+    const Palette& onyx = CurrentSettings().palette;
+    auto channel = [](float v) {
+        return ClampInt(static_cast<int>(v * 255.0f + 0.5f), 0, 255);
+    };
+
+    // The band takes the theme, written back to root parameter 1 in full.
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    g_rootWrites = 0;
+    CHECK(RecolorBandConstants(list, &state));
+    CHECK(g_rootWrites == 1);
+    CHECK(g_rootWrittenIndex == 1);
+    CHECK(g_rootWrittenCount == 4);
+    CHECK(channel(WrittenChannel(0)) == GetRValue(onyx.ramp[1]));
+    CHECK(channel(WrittenChannel(1)) == GetGValue(onyx.ramp[1]));
+    CHECK(channel(WrittenChannel(2)) == GetBValue(onyx.ramp[1]));
+    CHECK(WrittenChannel(3) == 1.0f);  // the draw's own alpha, untouched
+
+    // The state now holds what the shader will see, and is not judged again.
+    CHECK(channel(RootColorChannel(&state, 0)) == GetRValue(onyx.ramp[1]));
+    CHECK(!state.hasRoot1Color);
+    g_rootWrites = 0;
+    CHECK(!RecolorBandConstants(list, &state));
+    CHECK(g_rootWrites == 0);
+
+    /*
+        Black is left exactly as it is. This is the backing behind the picture
+        — the empty frame over a gap, and whatever shows through a clip with an
+        alpha channel — and touching it is what made the preview disappear.
+    */
+    SetRootColor(&state, 0.0f, 0.0f, 0.0f, 1.0f);
+    g_rootWrites = 0;
+    CHECK(!RecolorBandConstants(list, &state));
+    CHECK(g_rootWrites == 0);
+    CHECK(RootColorChannel(&state, 0) == 0.0f);
+
+    // A theme that names a band color uses it instead of the panel.
+    SetFakeTheme(L"base", L"#050505");
+    SetFakeTheme(L"panel", L"#090909");
+    SetFakeTheme(L"surface", L"#0E0E0E");
+    SetFakeTheme(L"raised", L"#161616");
+    SetFakeTheme(L"border", L"#242424");
+    SetFakeTheme(L"text", L"#E6E6E6");
+    SetFakeTheme(L"monitor", L"#200040");
+    g_fakePalette = L"custom";
+    LoadSettings();
+
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    CHECK(RecolorBandConstants(list, &state));
+    CHECK(channel(WrittenChannel(0)) == 0x20);
+    CHECK(channel(WrittenChannel(1)) == 0x00);
+    CHECK(channel(WrittenChannel(2)) == 0x40);
+
+    g_fakePalette = L"onyx";
+    ClearFakeTheme();
+
+    // Half strength lands halfway between what Premiere carries and the theme.
+    SetFakeInt(L"strength", 50);
+    LoadSettings();
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    CHECK(RecolorBandConstants(list, &state));
+    CHECK(channel(WrittenChannel(0)) == (0x1D + GetRValue(onyx.ramp[1]) + 1) / 2);
+
+    // At zero, and with the layer off, nothing is touched at all.
+    SetFakeInt(L"strength", 0);
+    LoadSettings();
+    CHECK(!MonitorBandActive(CurrentSettings()));
+
+    SetFakeInt(L"strength", 100);
+    SetFakeInt(L"brushHook", 0);
+    LoadSettings();
+    CHECK(!MonitorBandActive(CurrentSettings()));
+
+    SetFakeInt(L"brushHook", 1);
+    LoadSettings();
+
+    // A surface that is not a whole monitor is left alone whatever its color.
+    state.scissor = {0, 0, 640, 720};
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    g_rootWrites = 0;
+    CHECK(!RecolorBandConstants(list, &state));
+    CHECK(g_rootWrites == 0);
+
+    // And so is anything at all when the write cannot be made.
+    state.scissor = {0, 0, 1280, 720};
+    MonitorSetGraphicsRoot32BitConstants_Original = nullptr;
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    CHECK(!RecolorBandConstants(list, &state));
+
+    MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
+    LoadSettings();
 }
 
 static HookCount InstallColorHooksFrom(std::vector<const char*> exports) {
@@ -809,6 +1124,141 @@ static bool ShippedFlag(const char* name) {
     return s.compare(at + marker.size(), 4, "true") == 0;
 }
 
+// The WCAG contrast ratio, on the luminance the mod already computes.
+static float ContrastRatio(COLORREF a, COLORREF b) {
+    float la = Luminance(a);
+    float lb = Luminance(b);
+    float hi = la > lb ? la : lb;
+    float lo = la > lb ? lb : la;
+    return (hi + 0.05f) / (lo + 0.05f);
+}
+
+static float RampBrightness(COLORREF c) {
+    return (GetRValue(c) + GetGValue(c) + GetBValue(c)) / 3.0f / 255.0f;
+}
+
+/*
+    What the readme promises about every built-in palette, held to.
+
+    The accent is the background of a hovered menu item with the palette's own
+    text on it, so it is the one that has bitten: read at full saturation, a
+    bright accent against light text is a menu nobody can read. Blossom's,
+    Ember's, Amethyst's and Miku's were all darkened for this.
+*/
+static void TestPaletteRules() {
+    for (const NamedPalette& named : kPalettes) {
+        const Palette& p = named.colors;
+
+        // The five steps rise, deepest to lightest — the ramp is interpolated
+        // between them, so an inversion would fold two tones together.
+        for (int i = 1; i < 5; i++) {
+            CHECK(RampBrightness(p.ramp[i]) > RampBrightness(p.ramp[i - 1]));
+        }
+
+        // Text has to carry against the panel it sits on.
+        CHECK(ContrastRatio(p.text, p.ramp[1]) >= 7.0f);
+
+        // And the accent has to carry that same text.
+        CHECK(ContrastRatio(p.text, p.accent) >= 4.5f);
+
+        // Disabled text is dimmer than text, but still legible.
+        CHECK(Luminance(p.dimText) < Luminance(p.text));
+        CHECK(ContrastRatio(p.dimText, p.ramp[1]) >= 3.0f);
+
+        /*
+            A highlight is a hue, not a tone: the shade each of Premiere's
+            blues becomes is computed at that blue's own luminance, so white
+            keeps its footing on a blue button whatever hue replaces it.
+        */
+        if (p.highlight != CLR_INVALID) {
+            COLORREF track = RGB(0x00, 0x5C, 0xC8);  // the track-targeting blue
+            COLORREF shade = ShadeWithLuminance(p.highlight, Luminance(track));
+            CHECK(ContrastRatio(RGB(0xFF, 0xFF, 0xFF), shade) >= 4.5f);
+        }
+    }
+}
+
+/*
+    Every palette is offered, and every option is a palette. The list lives in
+    the settings block and the colors live in the code, so nothing but this
+    keeps a palette from being added to one and not the other.
+*/
+static void TestPaletteOptions() {
+    std::string s = ModSource();
+    size_t at = s.find("\n  $options:\n");
+    CHECK(at != std::string::npos);
+
+    std::vector<std::string> options;
+    size_t i = s.find('\n', at + 1) + 1;
+
+    while (i < s.size() && s.compare(i, 4, "  - ") == 0) {
+        size_t colon = s.find(':', i + 4);
+        options.push_back(s.substr(i + 4, colon - (i + 4)));
+        i = s.find('\n', i) + 1;
+    }
+
+    // The built-ins, plus Custom.
+    CHECK(options.size() == ARRAYSIZE(kPalettes) + 1);
+    CHECK(options.back() == "custom");
+
+    for (const NamedPalette& named : kPalettes) {
+        std::wstring id(named.id);
+        std::string narrow(id.begin(), id.end());
+        bool offered = false;
+
+        for (const std::string& option : options) {
+            offered = offered || option == narrow;
+        }
+
+        CHECK(offered);
+    }
+
+    // And each option that is not Custom names a palette that exists.
+    for (const std::string& option : options) {
+        if (option == "custom") {
+            continue;
+        }
+
+        std::wstring wide(option.begin(), option.end());
+        bool known = false;
+
+        for (const NamedPalette& named : kPalettes) {
+            known = known || wide == named.id;
+        }
+
+        CHECK(known);
+    }
+}
+
+/*
+    And every palette has a column in the readme's tables.
+
+    The tables and the prose around them are kept by hand, so nothing but this
+    stops a palette from shipping with its colors undocumented — which is what
+    nearly happened when Miku was added. The column header is what is looked
+    for, not the name on its own: "Premiere" is the name of the application on
+    almost every line.
+*/
+static void TestPaletteReadme() {
+    std::string s = ModSource();
+    size_t begin = s.find("// ==WindhawkModReadme==");
+    size_t end = s.find("// ==/WindhawkModReadme==");
+
+    CHECK(begin != std::string::npos);
+    CHECK(end != std::string::npos);
+    CHECK(begin < end);
+
+    std::string readme = s.substr(begin, end - begin);
+
+    for (const NamedPalette& named : kPalettes) {
+        std::wstring id(named.id);
+        std::string column = "| " + std::string(id.begin(), id.end());
+        column[2] = static_cast<char>(std::toupper(column[2]));
+
+        CHECK(readme.find(column) != std::string::npos);
+    }
+}
+
 static void TestShippedDefaults() {
     /*
         The UXP layer is the one whose effect only a restart undoes, so it has
@@ -829,10 +1279,11 @@ static void TestCustomTheme() {
 
     // The block ships exactly the fields the reader knows...
     std::vector<ShippedField> shipped = ShippedTheme();
-    CHECK(shipped.size() == 9);
+    CHECK(shipped.size() == 10);
 
     for (const wchar_t* key : {L"base", L"panel", L"surface", L"raised", L"border",
-                               L"text", L"accent", L"disabledText", L"highlight"}) {
+                               L"text", L"accent", L"disabledText", L"highlight",
+                               L"monitor"}) {
         bool found = false;
 
         for (const ShippedField& field : shipped) {
@@ -865,7 +1316,8 @@ static void TestCustomTheme() {
                    {L"text", L"#E6E9F5"},
                    {L"accent", L"#3A4270"},
                    {L"disabledText", L"#6B7090"},
-                   {L"highlight", L"4F7BFF"}},
+                   {L"highlight", L"4F7BFF"},
+                   {L"monitor", L"#020409"}},
                   &logs);
     CHECK(p.ramp[0] == RGB(0x05, 0x06, 0x0A));
     CHECK(p.ramp[1] == RGB(0x0A, 0x0C, 0x14));
@@ -876,6 +1328,7 @@ static void TestCustomTheme() {
     CHECK(p.accent == RGB(0x3A, 0x42, 0x70));
     CHECK(p.dimText == RGB(0x6B, 0x70, 0x90));
     CHECK(p.highlight == RGB(0x4F, 0x7B, 0xFF));
+    CHECK(p.monitor == RGB(0x02, 0x04, 0x09));
     CHECK(CurrentSettings().highlight);
     CHECK(logs == 0);
 
@@ -930,11 +1383,94 @@ static void TestCustomTheme() {
     CHECK(p.dimText == onyx.dimText);
     CHECK(p.accent == onyx.ramp[4]);
     CHECK(p.highlight == CLR_INVALID);
+    CHECK(p.monitor == CLR_INVALID);  // the panel tone, as Premiere does
     CHECK(logs == 6);
 
     g_fakePalette = L"onyx";
     ClearFakeTheme();
     LoadSettings();
+}
+
+/*
+    A theme is shared as the settings text Windhawk itself reads, so the mod
+    writes its own out: the lines that are the theme, and nothing else, in the
+    names and the order the settings use.
+*/
+static void TestThemeForSharing() {
+    int logs = 0;
+
+    g_shareLogs = 0;
+    g_lastShared = nullptr;
+
+    Palette p = ThemeFrom({{L"base", L"#05060A"},
+                           {L"panel", L"#0A0C14"},
+                           {L"surface", L"#10131F"},
+                           {L"raised", L"#181C2C"},
+                           {L"border", L"#2A3048"},
+                           {L"text", L"#E6E9F5"},
+                           {L"accent", L"#3A4270"},
+                           {L"disabledText", L"#6B7090"},
+                           {L"highlight", L"#4F7BFF"},
+                           {L"monitor", L"#020409"}},
+                          &logs);
+    CHECK(logs == 0);
+    CHECK(g_shareLogs == 1);
+    CHECK(g_lastShared != nullptr);
+
+    /*
+        YAML's flow form, which is what the Settings tab's text mode reads: the
+        palette, then the group as a block under it. Every field is named the
+        way the settings name it, and the colors are quoted, because a bare #
+        opens a comment in YAML.
+    */
+    for (const wchar_t* key :
+         {L"{palette: custom, customTheme: {", L"base: '#05060A'",
+          L"panel: '#0A0C14'", L"surface: '#10131F'", L"raised: '#181C2C'",
+          L"border: '#2A3048'", L"text: '#E6E9F5'", L"accent: '#3A4270'",
+          L"disabledText: '#6B7090'", L"highlight: '#4F7BFF'",
+          L"monitor: '#020409'}}"}) {
+        CHECK(wcsstr(g_lastShared, key) != nullptr);
+    }
+
+    // The colors come back as the settings spell them, uppercase and hashed.
+    wchar_t hex[8];
+
+    FormatHexColor(RGB(0x05, 0x06, 0x0A), hex);
+    CHECK(wcscmp(hex, L"#05060A") == 0);
+
+    FormatHexColor(RGB(0xE6, 0xE9, 0xF5), hex);
+    CHECK(wcscmp(hex, L"#E6E9F5") == 0);
+
+    // A color the theme leaves to its default is written as an empty value,
+    // which is what the settings hold for it.
+    FormatHexColor(CLR_INVALID, hex);
+    CHECK(hex[0] == L'\0');
+
+    /*
+        The resolved theme is what goes out, not the raw fields: an accent left
+        empty travels as the border it became, so the theme lands the same way
+        on someone else's Windhawk.
+    */
+    g_shareLogs = 0;
+    p = ThemeFrom({{L"base", L"#000000"},
+                   {L"panel", L"#101010"},
+                   {L"surface", L"#202020"},
+                   {L"raised", L"#303030"},
+                   {L"border", L"#404040"},
+                   {L"text", L"#F0F0F0"}},
+                  &logs);
+    CHECK(g_shareLogs == 1);
+    CHECK(p.accent == RGB(0x40, 0x40, 0x40));
+    CHECK(wcsstr(g_lastShared, L"accent: '#404040'") != nullptr);
+    CHECK(wcsstr(g_lastShared, L"highlight: ''") != nullptr);
+    CHECK(wcsstr(g_lastShared, L"monitor: ''}}") != nullptr);
+
+    // A built-in palette is not a theme anyone needs the text of.
+    g_shareLogs = 0;
+    g_fakePalette = L"onyx";
+    ClearFakeTheme();
+    LoadSettings();
+    CHECK(g_shareLogs == 0);
 }
 
 static const DvaColorRGBA* g_seenColor = nullptr;
@@ -1561,6 +2097,10 @@ int main() {
     TestGdiProduced();
     TestKnownModules();
     TestModuleRangeUnload();
+    TestDisplaySurfaceRange();
+    TestMonitorBandColor();
+    TestMonitorFullSurface();
+    TestMonitorBandRecolor();
     TestGdiOrder();
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
@@ -1568,8 +2108,12 @@ int main() {
     TestMenuBarGate();
     TestMenuBarTheme();
     TestShippedDefaults();
+    TestPaletteRules();
+    TestPaletteOptions();
+    TestPaletteReadme();
     TestCustomDimText();
     TestCustomTheme();
+    TestThemeForSharing();
     TestHighlight();
     TestStylesheetRewrite();
     TestBundledStylesheetPath();
