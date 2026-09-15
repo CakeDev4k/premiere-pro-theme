@@ -677,6 +677,23 @@ static void STDMETHODCALLTYPE FakeSetRootConstants(ID3D12GraphicsCommandList*,
     }
 }
 
+// The rest of the layer's trampolines, which MonitorBandHooksReady wants set.
+static void STDMETHODCALLTYPE FakeSetViewports(ID3D12GraphicsCommandList*, UINT,
+                                               const D3D12_VIEWPORT*) {}
+
+static void STDMETHODCALLTYPE FakeSetScissors(ID3D12GraphicsCommandList*, UINT,
+                                              const D3D12_RECT*) {}
+
+static HRESULT STDMETHODCALLTYPE FakeReset(ID3D12GraphicsCommandList*,
+                                           ID3D12CommandAllocator*,
+                                           ID3D12PipelineState*) {
+    return S_OK;
+}
+
+static HRESULT STDMETHODCALLTYPE FakeClose(ID3D12GraphicsCommandList*) {
+    return S_OK;
+}
+
 static float WrittenChannel(int i) {
     float value = 0.0f;
     std::memcpy(&value, &g_rootWritten[i], sizeof(value));
@@ -826,6 +843,10 @@ static void TestMonitorBandRecolor() {
     LoadSettings();
 
     MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
+    MonitorRSSetViewports_Original = FakeSetViewports;
+    MonitorRSSetScissorRects_Original = FakeSetScissors;
+    MonitorReset_Original = FakeReset;
+    MonitorClose_Original = FakeClose;
 
     MonitorCommandState state{};
     state.hasViewport = true;
@@ -927,7 +948,34 @@ static void TestMonitorBandRecolor() {
     SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
     CHECK(!RecolorBandConstants(list, &state));
 
+    /*
+        Or when only some of the layer went in. The two hooks that bound a
+        recording are the ones a partial install drops quietly, and without
+        them the recolor would be running on state nothing invalidates.
+    */
     MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
+
+    for (void** missing : {reinterpret_cast<void**>(&MonitorReset_Original),
+                           reinterpret_cast<void**>(&MonitorClose_Original),
+                           reinterpret_cast<void**>(&MonitorRSSetViewports_Original),
+                           reinterpret_cast<void**>(&MonitorRSSetScissorRects_Original)}) {
+        void* saved = *missing;
+        *missing = nullptr;
+
+        SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+        g_rootWrites = 0;
+        CHECK(!RecolorBandConstants(list, &state));
+        CHECK(g_rootWrites == 0);
+
+        *missing = saved;
+    }
+
+    // Whole again, and back to recoloring.
+    CHECK(MonitorBandHooksReady());
+    SetRootColor(&state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    CHECK(RecolorBandConstants(list, &state));
+
+    ForgetMonitorState(list);
     LoadSettings();
 }
 
@@ -984,26 +1032,45 @@ static void TestMonitorConstantShape() {
 }
 
 /*
-    Reset ends a recording, and the slot goes with it.
+    A slot describes one recording, bounded at both ends.
 
-    Reset clears the list's viewport, scissor and root constants, so state kept
-    across it would describe work that is over — and a released list's address
-    can be handed to a new one, which must not inherit any of it.
+    Reset begins one and clears the list's viewport, scissor and root
+    constants; Close ends it. State kept past either would describe work that
+    is over — and a released list's address can be handed to a new one, whose
+    owner would then inherit a full-surface viewport it never set and have its
+    own dark gray taken for the band.
 */
 static void TestMonitorReset() {
     auto list = reinterpret_cast<ID3D12GraphicsCommandList*>(0x3000);
 
-    MonitorCommandState* state = MonitorStateFor(list);
-    CHECK(state != nullptr);
+    auto record = [&] {
+        MonitorCommandState* s = MonitorStateFor(list);
+        CHECK(s != nullptr);
+        s->hasViewport = true;
+        s->viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
+        s->hasScissor = true;
+        s->scissor = {0, 0, 1280, 720};
+        CHECK(IsFullMonitorState(*s));
+        return s;
+    };
 
-    state->hasViewport = true;
-    state->viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
-    state->hasScissor = true;
-    state->scissor = {0, 0, 1280, 720};
-    CHECK(IsFullMonitorState(*state));
+    MonitorRSSetViewports_Original = FakeSetViewports;
+    MonitorRSSetScissorRects_Original = FakeSetScissors;
+    MonitorReset_Original = FakeReset;
+    MonitorClose_Original = FakeClose;
 
+    MonitorCommandState* state = record();
     CHECK(KnownMonitorState(list) == state);
 
+    // Both ends of a recording drop it.
+    MonitorReset_Hook(list, nullptr, nullptr);
+    CHECK(KnownMonitorState(list) == nullptr);
+
+    record();
+    MonitorClose_Hook(list);
+    CHECK(KnownMonitorState(list) == nullptr);
+
+    record();
     ForgetMonitorState(list);
     CHECK(KnownMonitorState(list) == nullptr);
 

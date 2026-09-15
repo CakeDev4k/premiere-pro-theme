@@ -213,8 +213,9 @@ their layer switches along with their colors; anything you leave out goes back
 to its default. The log writes only the palette and the colors for that reason,
 and writes them resolved — a field left empty travels as the color it became.
 
-Keep the five steps dark and in order: Premiere's own text is light and is not
-recolored.
+Keep the five steps dark and in order. Premiere's own text is light and is not
+recolored, and the monitor band is recognized by working back along the ramp,
+which a ramp that doubles back on itself would confuse.
 
 ## What it changes, and what it leaves alone
 
@@ -257,7 +258,8 @@ caches of its own.
 If a Premiere update ever makes a panel misbehave with the mod on, switch off
 **Premiere interface**, **Direct fills** and **GDI surfaces** together and
 restart Premiere. With all three off when the mod loads, it does not hook
-Premiere's own modules at all.
+Premiere's own modules at all — and **Monitor band** off means it does not
+touch Direct3D either, not even to watch for the device.
 
 ## Other mods that darken menus
 
@@ -5574,18 +5576,44 @@ using MonitorReset_t =
     HRESULT(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,
                                 ID3D12CommandAllocator*, ID3D12PipelineState*);
 
+using MonitorClose_t = HRESULT(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*);
+
 MonitorRSSetViewports_t MonitorRSSetViewports_Original = nullptr;
 MonitorRSSetScissorRects_t MonitorRSSetScissorRects_Original = nullptr;
 MonitorSetGraphicsRoot32BitConstants_t
     MonitorSetGraphicsRoot32BitConstants_Original = nullptr;
 MonitorReset_t MonitorReset_Original = nullptr;
+MonitorClose_t MonitorClose_Original = nullptr;
 
 /*
-    A new recording on this list. Reset clears the viewport, the scissor and
-    the root constants, so everything recorded for it describes work that is
-    over — and a list whose address is later handed to a new one must not
-    inherit any of it. Dropping the slot here is what keeps one entry
-    describing one recording.
+    Every hook this layer needs is in place.
+
+    They are registered together but can fail one at a time, and the two that
+    bound a recording are the ones a partial install would quietly drop —
+    leaving the recolor running on state nothing invalidates. So the layer
+    only acts when it is whole.
+*/
+static bool MonitorBandHooksReady() {
+    return MonitorRSSetViewports_Original && MonitorRSSetScissorRects_Original &&
+           MonitorSetGraphicsRoot32BitConstants_Original &&
+           MonitorReset_Original && MonitorClose_Original;
+}
+
+/*
+    A slot describes one recording and no more.
+
+    Reset begins a recording, clearing the list's viewport, scissor and root
+    constants; Close ends it. Between those two, what the mod recorded is what
+    the list is really carrying. Outside them it is stale, and a released
+    list's address can be handed to a new one — whose owner would otherwise
+    inherit a full-surface viewport it never set, and have its own dark gray
+    taken for the band. Both ends drop the slot, so a recording's state cannot
+    outlive it.
+
+    These two are the only hooks here that do not check the setting first.
+    With the layer off nothing is ever recorded, so forgetting costs a walk of
+    eight empty slots — and checking would mean state recorded before the
+    switch went off could still be there when it came back on.
 */
 HRESULT STDMETHODCALLTYPE
 MonitorReset_Hook(ID3D12GraphicsCommandList* commandList,
@@ -5594,6 +5622,13 @@ MonitorReset_Hook(ID3D12GraphicsCommandList* commandList,
     ForgetMonitorState(commandList);
 
     return MonitorReset_Original(commandList, allocator, initialState);
+}
+
+HRESULT STDMETHODCALLTYPE
+MonitorClose_Hook(ID3D12GraphicsCommandList* commandList) {
+    ForgetMonitorState(commandList);
+
+    return MonitorClose_Original(commandList);
 }
 
 /*
@@ -5670,7 +5705,7 @@ static bool RecolorBandConstants(ID3D12GraphicsCommandList* commandList,
                                  MonitorCommandState* state) {
     const Settings& s = CurrentSettings();
 
-    if (!state || !MonitorSetGraphicsRoot32BitConstants_Original ||
+    if (!state || !MonitorBandHooksReady() || !MonitorBandActive(s) ||
         !IsFullMonitorState(*state) || !IsMonitorBandColor(s, *state)) {
         return false;
     }
@@ -5779,6 +5814,7 @@ static bool InstallMonitorBandHooks(ID3D12Device* device) {
         it is a slot in a Microsoft interface, not an offset into Adobe's
         code, which is what the layer deliberately avoids.
     */
+    void* close = vtable[9];              // Close
     void* reset = vtable[10];             // Reset
     void* setViewports = vtable[21];      // RSSetViewports
     void* setScissors = vtable[22];       // RSSetScissorRects
@@ -5806,8 +5842,13 @@ static bool InstallMonitorBandHooks(ID3D12Device* device) {
         reinterpret_cast<MonitorReset_t>(reset), MonitorReset_Hook,
         &MonitorReset_Original);
 
+    ok &= WindhawkUtils::SetFunctionHook(
+        reinterpret_cast<MonitorClose_t>(close), MonitorClose_Hook,
+        &MonitorClose_Original);
+
     if (!ok) {
-        Wh_Log(L"monitor band: one or more D3D12 hooks failed");
+        Wh_Log(L"monitor band: one or more D3D12 hooks failed; the band keeps "
+               L"Premiere's gray rather than running on half a layer");
     }
 
     InterlockedExchange(&g_monitorBandInstalled, TRUE);
@@ -5859,7 +5900,8 @@ HRESULT WINAPI D3D12CreateDevice_Hook(IUnknown* adapter, D3D_FEATURE_LEVEL level
     it is safe to run with the loader lock held.
 */
 static bool HookD3D12CreateDevice() {
-    if (g_d3d12CreateDeviceHooked) {
+    // With the layer off, d3d12 is not touched at all — not even this.
+    if (g_d3d12CreateDeviceHooked || !CurrentSettings().monitorBand) {
         return false;
     }
 
@@ -5965,15 +6007,21 @@ BOOL Wh_ModInit() {
     SnapshotAdobeModules();
     InitNativeDarkMode();
 
-    // Only the export, which costs nothing; the monitor layer goes in when
-    // Premiere makes its device. See D3D12CreateDevice_Hook.
+    /*
+        Only the export, and only when "Monitor band" is on: the layer itself
+        goes in when Premiere makes its device, and with the switch off d3d12
+        is left alone entirely. Turning it on later is covered by the loader
+        hook, which tries this again, and by the probe in
+        Wh_ModSettingsChanged. See D3D12CreateDevice_Hook.
+    */
     HookD3D12CreateDevice();
 
     /*
-        Every Windows hook is installed whatever the settings say, and each one
-        checks its own setting every time it runs — so one whose setting is off
-        only forwards the call it received. Installing them all is what lets
-        Wh_ModSettingsChanged apply a change without reloading the mod.
+        The Windows hooks below are installed whatever the settings say, and
+        each one checks its own setting every time it runs — so one whose
+        setting is off only forwards the call it received. Installing them all
+        is what lets Wh_ModSettingsChanged apply a change without reloading the
+        mod.
         Premiere's own modules are the exception; see HookLoadedModules.
     */
     HookOrLog(CreateWindowExW, CreateWindowExW_Hook, &CreateWindowExW_Original,
