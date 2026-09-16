@@ -700,6 +700,9 @@ static void STDMETHODCALLTYPE FakeSetRootSignature(ID3D12GraphicsCommandList*,
 static void STDMETHODCALLTYPE FakeClearState(ID3D12GraphicsCommandList*,
                                              ID3D12PipelineState*) {}
 
+static void STDMETHODCALLTYPE FakeExecuteBundle(ID3D12GraphicsCommandList*,
+                                                ID3D12GraphicsCommandList*) {}
+
 // Every trampoline the layer wants before it will act on anything.
 static void InstallFakeMonitorHooks() {
     MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
@@ -709,6 +712,7 @@ static void InstallFakeMonitorHooks() {
     MonitorClose_Original = FakeClose;
     MonitorSetGraphicsRootSignature_Original = FakeSetRootSignature;
     MonitorClearState_Original = FakeClearState;
+    MonitorExecuteBundle_Original = FakeExecuteBundle;
 }
 
 static float WrittenChannel(int i) {
@@ -975,7 +979,8 @@ static void TestMonitorBandRecolor() {
           reinterpret_cast<void**>(&MonitorRSSetViewports_Original),
           reinterpret_cast<void**>(&MonitorRSSetScissorRects_Original),
           reinterpret_cast<void**>(&MonitorSetGraphicsRootSignature_Original),
-          reinterpret_cast<void**>(&MonitorClearState_Original)}) {
+          reinterpret_cast<void**>(&MonitorClearState_Original),
+          reinterpret_cast<void**>(&MonitorExecuteBundle_Original)}) {
         void* saved = *missing;
         *missing = nullptr;
 
@@ -1139,9 +1144,28 @@ static void TestMonitorRootSignature() {
     CHECK(RecolorBandConstants(list, state));
     CHECK(g_rootWrites == 1);
 
-    // A list this layer is not following is not started by a signature.
+    /*
+        A bundle does the same without ever reaching the signature hook: it
+        may set a root signature and root arguments that stay on this list
+        after it returns. The surface is kept — D3D12 does not allow
+        RSSetViewports or RSSetScissorRects inside a bundle — so only the
+        color goes, and the recolor waits for the next one.
+    */
+    SetRootColor(state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    CHECK(state->hasRoot1Color);
+
+    g_rootWrites = 0;
+    MonitorExecuteBundle_Hook(list, nullptr);
+    CHECK(!state->hasRoot1Color);
+    CHECK(state->hasViewport);
+    CHECK(state->hasScissor);
+    CHECK(!RecolorBandConstants(list, state));
+    CHECK(g_rootWrites == 0);
+
+    // A list this layer is not following is started by neither.
     auto other = reinterpret_cast<ID3D12GraphicsCommandList*>(0x6100);
     MonitorSetGraphicsRootSignature_Hook(other, nullptr);
+    MonitorExecuteBundle_Hook(other, nullptr);
     CHECK(KnownMonitorState(other) == nullptr);
 
     ForgetMonitorState(list);
@@ -1641,7 +1665,7 @@ static void TestSettingsChangedRetriesBothWaysIn() {
 /*
     A partial install is never tried a second time.
 
-    InstallMonitorBandHooks registers seven hooks and can fail on any of them,
+    InstallMonitorBandHooks registers eight hooks and can fail on any of them,
     and the six that took are registered already. Both ways in used to release
     g_monitorBandTried on any failure, and Wh_ModSettingsChanged runs the probe
     on every settings change — so the next one would register a second hook
@@ -1690,6 +1714,22 @@ static void TestMonitorPartialInstallLatch() {
 
     // Both ways in, plus the probe's own device check.
     CHECK(releases == 3);
+
+    /*
+        And the opposite case, which is the other latch: hooking the d3d12
+        export registers exactly one hook, so a failure there has left nothing
+        behind and must put its latch back — or neither the loader hook nor a
+        settings change ever tries the export again.
+    */
+    size_t at_fn = s.find("static bool HookD3D12CreateDevice() {");
+    CHECK(at_fn != std::string::npos);
+
+    size_t close = s.find("\n}\n", at_fn);
+    CHECK(close != std::string::npos);
+
+    std::string body = s.substr(at_fn, close - at_fn);
+    CHECK(body.find("InterlockedExchange(&g_d3d12CreateDeviceHooked, FALSE)") !=
+          std::string::npos);
 }
 
 /*
@@ -1709,6 +1749,7 @@ static void TestMonitorVtableSlots() {
                               std::pair{"vtable[11]", "ClearState"},
                               std::pair{"vtable[21]", "RSSetViewports"},
                               std::pair{"vtable[22]", "RSSetScissorRects"},
+                              std::pair{"vtable[27]", "ExecuteBundle"},
                               std::pair{"vtable[30]", "SetGraphicsRootSignature"},
                               std::pair{"vtable[36]",
                                         "SetGraphicsRoot32BitConstants"}}) {
@@ -2558,7 +2599,7 @@ static void TestStylesheetRedirect() {
     // stepped around and left untouched.
     const std::wstring taken = std::wstring(temp) + L"premiere-pro-theme-" +
                                std::to_wstring(GetCurrentProcessId()) + L"-" +
-                               std::to_wstring(g_stylesheetSerial + 1) + L".css";
+                               std::to_wstring(g_bundledSerial + 1) + L".css";
     HANDLE squat = CreateFileW(taken.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                                FILE_ATTRIBUTE_NORMAL, nullptr);
     WriteFile(squat, "keep", 4, &written, nullptr);
