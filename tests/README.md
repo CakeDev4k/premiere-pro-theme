@@ -23,9 +23,13 @@ the Windhawk API stubbed out. They cover:
 - the monitor band: the DisplaySurface range, which colors are the band's —
   held against every palette's own conversion of Premiere's gray, not just the
   neutral ones — what counts as a full-surface draw, that only the exact float4
-  is taken for a color, that a recording's state does not outlive it, that a
-  partial install of the layer's hooks stops it acting at all, that the recolor
-  does not depend on the order DisplaySurface records in, and that recoloring
+  is taken for a color, that a recording's state does not outlive it at Reset,
+  Close or ClearState, that a partial install of the layer's hooks stops it
+  acting at all, that the recolor does not depend on the order DisplaySurface
+  records in, that a color is never replayed under a root signature it was not
+  set for, that each hook is taken from the vtable slot holding the method it
+  names, that a thread recording none of DisplaySurface's work never walks the
+  slot table, and that recoloring
   rewrites the band's own color while leaving the black behind the picture
   untouched;
 - the menu theme bookkeeping;

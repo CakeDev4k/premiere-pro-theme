@@ -694,6 +694,23 @@ static HRESULT STDMETHODCALLTYPE FakeClose(ID3D12GraphicsCommandList*) {
     return S_OK;
 }
 
+static void STDMETHODCALLTYPE FakeSetRootSignature(ID3D12GraphicsCommandList*,
+                                                   ID3D12RootSignature*) {}
+
+static void STDMETHODCALLTYPE FakeClearState(ID3D12GraphicsCommandList*,
+                                             ID3D12PipelineState*) {}
+
+// Every trampoline the layer wants before it will act on anything.
+static void InstallFakeMonitorHooks() {
+    MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
+    MonitorRSSetViewports_Original = FakeSetViewports;
+    MonitorRSSetScissorRects_Original = FakeSetScissors;
+    MonitorReset_Original = FakeReset;
+    MonitorClose_Original = FakeClose;
+    MonitorSetGraphicsRootSignature_Original = FakeSetRootSignature;
+    MonitorClearState_Original = FakeClearState;
+}
+
 static float WrittenChannel(int i) {
     float value = 0.0f;
     std::memcpy(&value, &g_rootWritten[i], sizeof(value));
@@ -842,11 +859,7 @@ static void TestMonitorBandRecolor() {
     SetFakeInt(L"strength", 100);
     LoadSettings();
 
-    MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
-    MonitorRSSetViewports_Original = FakeSetViewports;
-    MonitorRSSetScissorRects_Original = FakeSetScissors;
-    MonitorReset_Original = FakeReset;
-    MonitorClose_Original = FakeClose;
+    InstallFakeMonitorHooks();
 
     MonitorCommandState state{};
     state.hasViewport = true;
@@ -949,16 +962,20 @@ static void TestMonitorBandRecolor() {
     CHECK(!RecolorBandConstants(list, &state));
 
     /*
-        Or when only some of the layer went in. The two hooks that bound a
-        recording are the ones a partial install drops quietly, and without
-        them the recolor would be running on state nothing invalidates.
+        Or when only some of the layer went in. The hooks that take state away
+        are the ones a partial install drops quietly — the two that bound a
+        recording and the two that undo what the recolor reads — and without
+        them it would be running on state nothing invalidates.
     */
     MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
 
-    for (void** missing : {reinterpret_cast<void**>(&MonitorReset_Original),
-                           reinterpret_cast<void**>(&MonitorClose_Original),
-                           reinterpret_cast<void**>(&MonitorRSSetViewports_Original),
-                           reinterpret_cast<void**>(&MonitorRSSetScissorRects_Original)}) {
+    for (void** missing :
+         {reinterpret_cast<void**>(&MonitorReset_Original),
+          reinterpret_cast<void**>(&MonitorClose_Original),
+          reinterpret_cast<void**>(&MonitorRSSetViewports_Original),
+          reinterpret_cast<void**>(&MonitorRSSetScissorRects_Original),
+          reinterpret_cast<void**>(&MonitorSetGraphicsRootSignature_Original),
+          reinterpret_cast<void**>(&MonitorClearState_Original)}) {
         void* saved = *missing;
         *missing = nullptr;
 
@@ -1048,11 +1065,7 @@ static void TestMonitorRecolorOrder() {
     SetFakeInt(L"strength", 100);
     LoadSettings();
 
-    MonitorSetGraphicsRoot32BitConstants_Original = FakeSetRootConstants;
-    MonitorRSSetViewports_Original = FakeSetViewports;
-    MonitorRSSetScissorRects_Original = FakeSetScissors;
-    MonitorReset_Original = FakeReset;
-    MonitorClose_Original = FakeClose;
+    InstallFakeMonitorHooks();
 
     MonitorCommandState state{};
 
@@ -1073,6 +1086,63 @@ static void TestMonitorRecolorOrder() {
     state.scissor = {0, 0, 1280, 720};
     CHECK(RecolorBandConstants(list, &state));
     CHECK(g_rootWrites == 1);
+
+    ForgetMonitorState(list);
+    LoadSettings();
+}
+
+/*
+    A color is only replayed under the root signature it was set for.
+
+    Root constants belong to a signature: D3D12 makes every binding stale the
+    moment a different one is set. The replay from the viewport and scissor
+    hooks is the path that could reach a color set under an older signature,
+    and writing four words at root parameter 1 of a signature that holds a
+    descriptor table there is undefined behavior — in release, a removed
+    device. So the signature is followed, and the color goes with it.
+*/
+static void TestMonitorRootSignature() {
+    auto list = reinterpret_cast<ID3D12GraphicsCommandList*>(0x6000);
+
+    g_fakePalette = L"onyx";
+    ClearFakeTheme();
+    SetFakeInt(L"monitorBand", 1);
+    SetFakeInt(L"strength", 100);
+    LoadSettings();
+
+    InstallFakeMonitorHooks();
+
+    MonitorCommandState* state = MonitorStateFor(list);
+    CHECK(state != nullptr);
+
+    // The color first, then a new signature, then the surface — the order the
+    // replay is there for, and the one that must not replay.
+    SetRootColor(state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    CHECK(state->hasRoot1Color);
+
+    MonitorSetGraphicsRootSignature_Hook(list, nullptr);
+    CHECK(!state->hasRoot1Color);
+
+    state->hasViewport = true;
+    state->viewport = {0.0f, 0.0f, 1280.0f, 720.0f, 0.0f, 1.0f};
+    state->hasScissor = true;
+    state->scissor = {0, 0, 1280, 720};
+    CHECK(IsFullMonitorState(*state));
+
+    g_rootWrites = 0;
+    CHECK(!RecolorBandConstants(list, state));
+    CHECK(g_rootWrites == 0);
+
+    // The surface survives the change — it is not root state — so the color
+    // set again under the new signature completes the set on its own.
+    SetRootColor(state, 0x1D / 255.0f, 0x1D / 255.0f, 0x1D / 255.0f, 1.0f);
+    CHECK(RecolorBandConstants(list, state));
+    CHECK(g_rootWrites == 1);
+
+    // A list this layer is not following is not started by a signature.
+    auto other = reinterpret_cast<ID3D12GraphicsCommandList*>(0x6100);
+    MonitorSetGraphicsRootSignature_Hook(other, nullptr);
+    CHECK(KnownMonitorState(other) == nullptr);
 
     ForgetMonitorState(list);
     LoadSettings();
@@ -1101,12 +1171,17 @@ static void TestMonitorReset() {
         return s;
     };
 
-    MonitorRSSetViewports_Original = FakeSetViewports;
-    MonitorRSSetScissorRects_Original = FakeSetScissors;
-    MonitorReset_Original = FakeReset;
-    MonitorClose_Original = FakeClose;
+    InstallFakeMonitorHooks();
+
+    /*
+        With nothing recorded the table is not walked at all. Reset, Close and
+        SetGraphicsRootSignature run for every D3D12 caller in the process, so
+        a thread that is not DisplaySurface's has to stop before the slots.
+    */
+    CHECK(g_monitorStatesLive == 0);
 
     MonitorCommandState* state = record();
+    CHECK(g_monitorStatesLive == 1);
     CHECK(KnownMonitorState(list) == state);
 
     // Both ends of a recording drop it.
@@ -1115,6 +1190,12 @@ static void TestMonitorReset() {
 
     record();
     MonitorClose_Hook(list);
+    CHECK(KnownMonitorState(list) == nullptr);
+
+    // And ClearState, which empties the viewports and the scissor rectangles
+    // and unbinds the root signature — everything the decision is made of.
+    record();
+    MonitorClearState_Hook(list, nullptr);
     CHECK(KnownMonitorState(list) == nullptr);
 
     record();
@@ -1141,11 +1222,17 @@ static void TestMonitorReset() {
     }
 
     // The most recent kMaxMonitorStates are the ones still held.
+    CHECK(g_monitorStatesLive == kMaxMonitorStates);
+
     for (size_t i = 4; i < kMaxMonitorStates + 4; i++) {
         auto many = reinterpret_cast<ID3D12GraphicsCommandList*>(0x4000 + i * 16);
         CHECK(KnownMonitorState(many) != nullptr);
         ForgetMonitorState(many);
     }
+
+    // And the count comes back with them, or the early-out above never engages
+    // again for the rest of the process.
+    CHECK(g_monitorStatesLive == 0);
 }
 
 static HookCount InstallColorHooksFrom(std::vector<const char*> exports) {
@@ -1548,6 +1635,43 @@ static void TestSettingsChangedRetriesBothWaysIn() {
         std::string text = s.substr(open_brace, close - open_brace);
         CHECK(text.find("RecolorBandConstants(commandList, state)") !=
               std::string::npos);
+    }
+}
+
+/*
+    Each D3D12 hook is taken from the slot that holds the method it names.
+
+    The slots are counted off the order d3d12.h declares the interface in, and
+    they are the one number in the mod that is not looked up by name. A wrong
+    one would hook a different method of the same interface — a plausible
+    mistake with a silent, wrong-looking result — so the number and the name
+    beside it are checked against each other.
+*/
+static void TestMonitorVtableSlots() {
+    std::string s = ModSource();
+
+    for (auto [slot, name] : {std::pair{"vtable[9]", "Close"},
+                              std::pair{"vtable[10]", "Reset"},
+                              std::pair{"vtable[11]", "ClearState"},
+                              std::pair{"vtable[21]", "RSSetViewports"},
+                              std::pair{"vtable[22]", "RSSetScissorRects"},
+                              std::pair{"vtable[30]", "SetGraphicsRootSignature"},
+                              std::pair{"vtable[36]",
+                                        "SetGraphicsRoot32BitConstants"}}) {
+        size_t at = s.find(slot);
+        CHECK(at != std::string::npos);
+
+        if (at == std::string::npos) {
+            continue;
+        }
+
+        // The name is the last thing on the line the slot is read on.
+        size_t line = s.find('\n', at);
+        size_t length = std::strlen(name);
+        bool named = line != std::string::npos && line >= length &&
+                     s.compare(line - length, length, name) == 0;
+
+        CHECK(named);
     }
 }
 
@@ -2620,7 +2744,9 @@ int main() {
     TestMonitorConstantShape();
     TestMonitorReset();
     TestMonitorRecolorOrder();
+    TestMonitorRootSignature();
     TestSettingsChangedRetriesBothWaysIn();
+    TestMonitorVtableSlots();
     TestGdiOrder();
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
