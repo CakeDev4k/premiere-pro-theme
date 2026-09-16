@@ -2444,6 +2444,24 @@ static void TestStylesheetChromeCeiling() {
     CHECK(s.find(".i{border-color:#696969}") != std::string::npos);
 
     /*
+        A hex run that no property introduced is not a color. An id selector
+        is the case that looks exactly like one, and rewriting it would leave
+        a rule matching nothing — so only a declaration value is touched.
+    */
+    char selector[] = "#1d1d1d{color:#c8c8c8}#2c2c2c:hover{background:#1d1d1d}";
+    const std::string beforeSelector = selector;
+
+    RecolorStylesheet(selector, beforeSelector.size());
+
+    const std::string after = selector;
+    CHECK(after.size() == beforeSelector.size());
+    CHECK(after.compare(0, 7, "#1d1d1d") == 0);
+    CHECK(after.find("}#2c2c2c:hover{") != std::string::npos);
+
+    // The value inside the rule is still converted, selector or no selector.
+    CHECK(after.find("{background:#1d1d1d}") == std::string::npos);
+
+    /*
         A lower ceiling takes the border back out of reach, which is right: a
         lower ceiling is the user asking for less of the interface to be
         touched, not for borders to be exempt from that.

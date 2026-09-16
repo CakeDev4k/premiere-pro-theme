@@ -137,7 +137,46 @@ than leaving you to guess:
   creates or, when the switch is flipped later, from one of the mod's own —
   no restart in either direction.
 
-Both are written up in full, with the measurements, in the mod's readme.
+## How those two work
+
+The mod's own readme says what they do; this is how.
+
+### A UXP panel keeps its colors twice
+
+The stylesheet is one. The other is a table of design tokens in the panel's
+own script, which its components read and set as inline styles — and an inline
+style beats every rule a stylesheet can state. The search field in the Text
+panel is one of those: its fill comes from
+`"background-color":"rgb(37, 37, 37)"` in `main.js`, and no amount of
+recoloring `main.css` reaches it.
+
+So the mod recolors that shape too, and only that shape: a `<name>-color` key
+whose value is an `rgb()` string. It does not go looking for hex colors in a
+script the way it does in a stylesheet — the icons in the same file are hex,
+and an icon has to stay an icon — and it rewrites the digits inside the quotes
+at their own length, so the script parses exactly as it did.
+
+This costs a panel one extra read of its own script when it loads, because a
+file has to be read to know whether it holds any tokens at all. Measured on
+Premiere 2026: 118 files and 38.4 MB under `UXP\plugins`, of which 9 files and
+14.9 MB carry tokens — the other 109 are read and discarded. Size is no
+filter, since the largest one carrying tokens is 7.5 MB. That is why it rides
+on the same switch as the stylesheets rather than getting one of its own.
+
+### The band is a quad per side of the picture
+
+Zoomed out, the monitors paint the area around the picture outside every layer
+above: Premiere lays its panel gray over that area as a quad per side, through
+`DisplaySurface.dll`. The mod recognizes those calls by the module they come
+from and by the color they carry, and replaces the color those quads paint
+with on its way to the shader.
+
+Only those quads change. What shows between them — behind the picture — is the
+clear, which is black, and is also the backing the picture is composited onto.
+Coloring it would come through anything the picture does not cover, whether
+that is a gap in the timeline or the transparent part of a clip with an alpha
+channel. So it is left exactly as Premiere draws it, which is why a
+transparent PNG still sits on black.
 
 ## Questions, bugs and palettes
 
