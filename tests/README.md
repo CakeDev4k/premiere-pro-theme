@@ -10,7 +10,8 @@ the Windhawk API stubbed out. They cover:
   past the ceiling is recolored while text at the same value is not, and the
   design tokens in the panel's own script, including that an icon stroke and a
   loose string beside them are left alone;
-- the file redirect on real temporary files;
+- the file redirect on real temporary files, for a stylesheet and for a script,
+  including that the copy carries the extension of the file it stands in for;
 - the custom theme fields, checked against the defaults the settings block
   itself ships, and the theme the mod writes out for sharing;
 - every built-in palette against the rules the readme states: a rising ramp,

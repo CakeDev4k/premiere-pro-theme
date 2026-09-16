@@ -2392,6 +2392,36 @@ static void TestStylesheetRedirect() {
     CloseHandle(kept);
     DeleteFileW(taken.c_str());
 
+    /*
+        A script is substituted the same way, and the copy carries the kind it
+        stands in for — a runtime that looks at the extension must not be
+        handed a .js under a .css name.
+    */
+    const std::wstring script = dirs[3] + L"\\main.js";
+    const std::string code = "x={\"border-color\":\"rgb(44, 44, 44)\"}";
+
+    file = CreateFileW(script.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                       FILE_ATTRIBUTE_NORMAL, nullptr);
+    WriteFile(file, code.data(), static_cast<DWORD>(code.size()), &written, nullptr);
+    CloseHandle(file);
+
+    copy = CreateFileW_Hook(script.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    CHECK(copy != INVALID_HANDLE_VALUE);
+
+    const std::string themedCode =
+        "x={\"border-color\":\"rgb(" + Triplet(ConvertChrome8(RGB(44, 44, 44)), 10) + ")\"}";
+    CHECK(ReadAllFrom(copy) == themedCode);
+
+    wchar_t scriptCopy[MAX_PATH + 8]{};
+    CHECK(GetFinalPathNameByHandleW(copy, scriptCopy, ARRAYSIZE(scriptCopy), 0) > 0);
+
+    std::wstring copyName(scriptCopy);
+    CHECK(copyName.size() >= 3 && copyName.compare(copyName.size() - 3, 3, L".js") == 0);
+
+    CloseHandle(copy);
+    DeleteFileW(script.c_str());
+
     // A write opens the file itself.
     copy = CreateFileW_Hook(css.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
                             OPEN_EXISTING, 0, nullptr);

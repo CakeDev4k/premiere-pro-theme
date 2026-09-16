@@ -296,6 +296,12 @@ script the way it does in a stylesheet — the icons in the same file are hex,
 and an icon has to stay an icon — and it rewrites the digits inside the quotes
 at their own length, so the script parses exactly as it did.
 
+This costs a panel one extra read of its own script when it loads, because a
+file has to be read to know whether it holds any tokens at all. In Premiere
+2026 nine of the plugins' scripts do and the rest do not, so most of that read
+is spent finding nothing — which is why this rides on the same switch as the
+stylesheets rather than on its own.
+
 **The band around the video is drawn on the GPU.** Zoomed out, the monitors
 paint the area around the picture outside every layer above: Premiere lays
 its panel gray over that area as a quad per side of the picture, through
@@ -3154,7 +3160,7 @@ CreateFileW_t CreateFileW_Original = nullptr;
 CreateFile2_t CreateFile2_Original = nullptr;
 
 // Far above any stylesheet Premiere ships.
-constexpr LONGLONG kMaxStylesheetBytes = 16LL << 20;
+constexpr LONGLONG kMaxBundledBytes = 16LL << 20;
 
 // A read of a file that already exists: what a copy can stand in for.
 static bool IsPlainRead(DWORD access, DWORD disposition, DWORD flags) {
@@ -3180,11 +3186,11 @@ static bool ReadWholeFile(LPCWSTR path, std::vector<char>* bytes) {
 
     LARGE_INTEGER size{};
     bool ok = GetFileSizeEx(file, &size) && size.QuadPart > 0 &&
-              size.QuadPart <= kMaxStylesheetBytes;
+              size.QuadPart <= kMaxBundledBytes;
 
     if (ok) {
         // A hook must not throw into Premiere: short of memory, the panel
-        // simply gets its own stylesheet.
+        // simply gets its own file.
         try {
             bytes->resize(static_cast<size_t>(size.QuadPart));
         } catch (const std::bad_alloc&) {
@@ -3227,9 +3233,9 @@ static wchar_t* AppendDecimal(wchar_t* out, unsigned long value) {
     that marks it delete-on-close, so Windows removes it once the caller's
     handle closes too, and also if Premiere exits without closing it.
 */
-static HANDLE WriteTemporaryCopy(const std::vector<char>& bytes, DWORD access,
-                                 DWORD share, LPSECURITY_ATTRIBUTES security,
-                                 DWORD flags) {
+static HANDLE WriteTemporaryCopy(const std::vector<char>& bytes, BundledFile kind,
+                                 DWORD access, DWORD share,
+                                 LPSECURITY_ATTRIBUTES security, DWORD flags) {
     wchar_t folder[MAX_PATH + 1]{};
     DWORD length = GetTempPathW(ARRAYSIZE(folder), folder);
 
@@ -3257,7 +3263,16 @@ static HANDLE WriteTemporaryCopy(const std::vector<char>& bytes, DWORD access,
         *end++ = L'-';
         end = AppendDecimal(
             end, static_cast<unsigned long>(InterlockedIncrement(&g_stylesheetSerial)));
-        wmemcpy(end, L".css", 5);  // and its terminator
+        /*
+            The copy stands in for the original, so it carries the same kind.
+            A script substituted under a .css name is asking a runtime that
+            looks at extensions to be surprised.
+        */
+        if (kind == BundledFile::Script) {
+            wmemcpy(end, L".js", 4);  // and its terminator
+        } else {
+            wmemcpy(end, L".css", 5);
+        }
 
         writer = CreateFileW_Original(name, GENERIC_WRITE | DELETE,
                                       FILE_SHARE_READ | FILE_SHARE_DELETE, nullptr,
@@ -3312,7 +3327,7 @@ static HANDLE WriteTemporaryCopy(const std::vector<char>& bytes, DWORD access,
 }
 
 /*
-    The recolored copy of a bundled stylesheet, or INVALID_HANDLE_VALUE for
+    The recolored copy of a bundled file, or INVALID_HANDLE_VALUE for
     the caller to open the file itself: when there is nothing to recolor, and
     when anything fails.
 */
@@ -3342,7 +3357,7 @@ static HANDLE OpenThemedBundledFile(LPCWSTR path, LPCWSTR relative,
         return INVALID_HANDLE_VALUE;
     }
 
-    HANDLE copy = WriteTemporaryCopy(bytes, access, share, security, flags);
+    HANDLE copy = WriteTemporaryCopy(bytes, kind, access, share, security, flags);
 
     if (copy == INVALID_HANDLE_VALUE) {
         DWORD error = GetLastError();
@@ -6375,7 +6390,8 @@ BOOL Wh_ModInit() {
     }
 
     /*
-        The UXP runtime reads the panels' stylesheets through these two, and
+        The UXP runtime reads the panels' stylesheets and scripts through
+        these two, and
         they are the only hooks the mod puts on a path every file open in the
         process takes. So unlike the rest, they go in only when "UXP panels"
         is on as the mod loads — turning it on later needs Premiere restarted,
@@ -6453,10 +6469,10 @@ void Wh_ModUninit() {
                L"band around the picture kept Premiere's own gray");
     }
 
-    // Nothing to hand back there: Premiere parsed those stylesheets already.
+    // Nothing to hand back there: Premiere parsed those files already.
     if (g_stylesheetsRecolored) {
-        Wh_Log(L"%ld UXP stylesheets were recolored this session; those panels "
-               L"keep the palette until Premiere restarts",
+        Wh_Log(L"%ld UXP files were recolored this session; those panels keep "
+               L"the palette until Premiere restarts",
                g_stylesheetsRecolored);
     }
 
