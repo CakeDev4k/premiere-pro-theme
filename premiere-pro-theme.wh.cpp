@@ -3609,6 +3609,16 @@ constexpr COLORREF kDwmColorDefault = 0xFFFFFFFF;  // DWMWA_COLOR_DEFAULT
     undoes exactly that and never touches a window the mod left alone.
     Destroyed windows are not removed as they go: the map drops dead handles
     whenever it doubles, and the revert re-checks each handle.
+
+    Which leaves one narrow window: a handle reused between two prunes carries
+    the old window's bits into the new one, and the revert then undoes on it
+    something the mod set on its predecessor. The cost is bounded and it is
+    paid once, at unload — immersive dark mode back to FALSE and the caption
+    colors back to the DWM default, which is where a Premiere window that the
+    mod did not touch already sits, or a theme class cleared on a window that
+    had one. Telling the two apart would need the destroy notification this
+    mod deliberately does not hook, for a window whose frame the revert is
+    about to set to what it already is.
 */
 constexpr BYTE kThemedClass = 1;  // DarkMode_Explorer, on the classes WantsExplorerTheme names
 constexpr BYTE kThemedFrame = 2;  // immersive dark mode, and caption colors on 22000+
