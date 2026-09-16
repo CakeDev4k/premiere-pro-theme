@@ -1639,6 +1639,60 @@ static void TestSettingsChangedRetriesBothWaysIn() {
 }
 
 /*
+    A partial install is never tried a second time.
+
+    InstallMonitorBandHooks registers seven hooks and can fail on any of them,
+    and the six that took are registered already. Both ways in used to release
+    g_monitorBandTried on any failure, and Wh_ModSettingsChanged runs the probe
+    on every settings change — so the next one would register a second hook
+    over this mod's own trampoline. The second hook's original would then be
+    the first hook's entry: a hook that calls itself, and a stack overflow on
+    the first viewport call DisplaySurface makes.
+
+    Only the failure that registered nothing may release the latch, so this
+    reads the source and fails if any release is reachable without it.
+*/
+static void TestMonitorPartialInstallLatch() {
+    std::string s = ModSource();
+
+    for (const char* name : {"MonitorBandInstall::Ok",
+                             "MonitorBandInstall::NoDevice",
+                             "MonitorBandInstall::HooksFailed"}) {
+        CHECK(s.find(name) != std::string::npos);
+    }
+
+    // The hook-engine failure has to be the one that keeps the latch.
+    CHECK(s.find("return MonitorBandInstall::HooksFailed;") != std::string::npos);
+
+    // And the result is never taken for a plain bool by either caller.
+    CHECK(s.find("if (InstallMonitorBandHooks(") == std::string::npos);
+
+    const std::string release = "InterlockedExchange(&g_monitorBandTried, FALSE)";
+    size_t at = 0;
+    int releases = 0;
+
+    while ((at = s.find(release, at)) != std::string::npos) {
+        releases++;
+
+        /*
+            Each release is either the probe's own "no device at all" path,
+            which runs before a single hook is registered, or it is gated on
+            the install saying the same thing.
+        */
+        size_t from = at > 400 ? at - 400 : 0;
+        std::string before = s.substr(from, at - from);
+
+        CHECK(before.find("MonitorBandInstall::NoDevice") != std::string::npos ||
+              before.find("FAILED(hr) || !device") != std::string::npos);
+
+        at += release.size();
+    }
+
+    // Both ways in, plus the probe's own device check.
+    CHECK(releases == 3);
+}
+
+/*
     Each D3D12 hook is taken from the slot that holds the method it names.
 
     The slots are counted off the order d3d12.h declares the interface in, and
@@ -1706,15 +1760,20 @@ static void TestPaletteReadme() {
 
 static void TestShippedDefaults() {
     /*
-        The UXP layer is the one whose effect only a restart undoes, so it has
-        to be the one the user turns on.
+        Two layers ship off, each for its own reason. The UXP layer's effect
+        only a restart undoes, so it has to be the one the user turns on. The
+        monitor band is the one that patches entry points every D3D12 program
+        in the process shares and writes into a command list it does not own —
+        the widest blast radius in the mod, and the readme's own advice opens
+        with turning it off, so it is not the thing that runs unasked.
     */
-    CHECK(!ShippedFlag("uxpPanels"));
+    for (const char* off : {"uxpPanels", "monitorBand"}) {
+        CHECK(!ShippedFlag(off));
+    }
 
     // Every other layer is on.
-    for (const char* on : {"dvauiHook", "brushHook", "monitorBand",
-                           "nativeDarkMode", "menuHook", "gdiHook",
-                           "highlight"}) {
+    for (const char* on : {"dvauiHook", "brushHook", "nativeDarkMode",
+                           "menuHook", "gdiHook", "highlight"}) {
         CHECK(ShippedFlag(on));
     }
 }
@@ -2747,6 +2806,7 @@ int main() {
     TestMonitorRootSignature();
     TestSettingsChangedRetriesBothWaysIn();
     TestMonitorVtableSlots();
+    TestMonitorPartialInstallLatch();
     TestGdiOrder();
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
