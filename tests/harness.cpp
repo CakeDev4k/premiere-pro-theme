@@ -139,9 +139,11 @@ static void FakeLog(PCWSTR format, ...) {
     g_absentLogs++;
 }
 
-// A dvaui stand-in that exports exactly the names in g_fakeExports.
+// Two dvaui stand-ins, each exporting exactly the names in its own list.
 static const HMODULE kFakeDvaui = reinterpret_cast<HMODULE>(0x10000);
+static const HMODULE kFakeOther = reinterpret_cast<HMODULE>(0x20000);
 static std::vector<const char*> g_fakeExports;
+static std::vector<const char*> g_fakeOtherExports;
 static FARPROC(WINAPI* const RealGetProcAddress)(HMODULE, LPCSTR) = GetProcAddress;
 
 static INT_PTR WINAPI FakeExport() {
@@ -149,11 +151,17 @@ static INT_PTR WINAPI FakeExport() {
 }
 
 static FARPROC WINAPI FakeGetProcAddress(HMODULE module, LPCSTR name) {
-    if (module != kFakeDvaui) {
+    const std::vector<const char*>* exports = nullptr;
+
+    if (module == kFakeDvaui) {
+        exports = &g_fakeExports;
+    } else if (module == kFakeOther) {
+        exports = &g_fakeOtherExports;
+    } else {
         return RealGetProcAddress(module, name);
     }
 
-    for (const char* exported : g_fakeExports) {
+    for (const char* exported : *exports) {
         if (std::strcmp(exported, name) == 0) {
             return FakeExport;
         }
@@ -1342,6 +1350,82 @@ static void TestColorHookCounting() {
     CHECK(uif.missing == 4);
 }
 
+/*
+    A Premiere that does not ship dvaui.dll: the toolkit is looked for by
+    symbol instead. Premiere 2026 exports ui::GetGrayColor from
+    dvaworkspace.dll as well, and that module carries 11 of the 26 functions
+    and paints none of the interface, so answering an anchor cannot be enough
+    on its own.
+*/
+static void TestColorModuleSearch() {
+    std::vector<const char*> everything;
+
+    for (const ColorSymbol& symbol : kColorSymbols) {
+        everything.push_back(symbol.mangled);
+    }
+
+    CHECK(kMinColorExports == 13);
+
+    std::vector<const char*> half(everything.begin(),
+                                  everything.begin() + kMinColorExports);
+    std::vector<const char*> partial(everything.begin(),
+                                     everything.begin() + kMinColorExports - 1);
+
+    // Two of the three anchors are names from the table; the third is the
+    // brush entry point. A spelling that drifts apart fails here.
+    int known = 0;
+
+    for (const char* anchor : kColorAnchors) {
+        for (const ColorSymbol& symbol : kColorSymbols) {
+            if (std::strcmp(anchor, symbol.mangled) == 0) {
+                known++;
+                break;
+            }
+        }
+    }
+
+    CHECK(known == 2);
+
+    const HMODULE both[] = {kFakeOther, kFakeDvaui};
+
+    // Nothing answers an anchor, so nothing is chosen.
+    g_fakeExports.clear();
+    g_fakeOtherExports.clear();
+    CHECK(FindColorModuleIn(both, 2) == nullptr);
+
+    // A copy of part of the toolkit answers an anchor and is still turned
+    // away — this is the dvaworkspace.dll case.
+    g_fakeOtherExports = partial;
+    CHECK(ExportsColorAnchor(kFakeOther));
+    CHECK(!QualifiesAsColorModule(kFakeOther));
+    CHECK(FindColorModuleIn(both, 2) == nullptr);
+
+    // Half the surface is enough to stand in.
+    g_fakeOtherExports = half;
+    CHECK(QualifiesAsColorModule(kFakeOther));
+    CHECK(FindColorModuleIn(both, 2) == kFakeOther);
+
+    // Against a module with the whole surface, the richer one wins, in either
+    // order, and a null handle in the set is skipped rather than asked.
+    g_fakeExports = everything;
+    CHECK(FindColorModuleIn(both, 2) == kFakeDvaui);
+
+    const HMODULE reversed[] = {kFakeDvaui, kFakeOther};
+    CHECK(FindColorModuleIn(reversed, 2) == kFakeDvaui);
+
+    const HMODULE withNull[] = {nullptr, kFakeDvaui};
+    CHECK(FindColorModuleIn(withNull, 2) == kFakeDvaui);
+
+    // The fill path alone is not a toolkit either.
+    g_fakeExports.clear();
+    g_fakeOtherExports = {kColorAnchors[2]};
+    CHECK(CountColorExports(kFakeOther) == 0);
+    CHECK(FindColorModuleIn(both, 2) == nullptr);
+
+    g_fakeExports.clear();
+    g_fakeOtherExports.clear();
+}
+
 static const void* g_seenOptions = nullptr;
 
 static HRESULT WINAPI FakeDrawThemeTextEx(HTHEME, HDC, int, int, LPCWSTR, int,
@@ -1634,7 +1718,9 @@ static void TestSettingsChangedRetriesBothWaysIn() {
 
     std::string body = s.substr(at, s.find("\n}\n", at) - at);
 
-    CHECK(body.find("HookLoadedModules()") != std::string::npos);
+    // With nullptr, true: the settings path is also one of the two that
+    // may walk the process for a toolkit under another name.
+    CHECK(body.find("HookLoadedModules(nullptr, true)") != std::string::npos);
     CHECK(body.find("HookD3D12CreateDevice()") != std::string::npos);
     CHECK(body.find("InstallMonitorBandFromProbe()") != std::string::npos);
 
@@ -2869,6 +2955,7 @@ int main() {
     TestGdiOrder();
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
+    TestColorModuleSearch();
     TestMenuTextOptions();
     TestMenuBarGate();
     TestMenuBarTheme();

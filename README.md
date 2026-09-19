@@ -118,6 +118,12 @@ moved or dropped a function loses that surface, not the mod.
 The window frame, menu bar and native dialogs are Windows, not Premiere, and
 work on any version. Native dark mode needs Windows 10 build 17763 or newer.
 
+The panels, timeline and monitors need the Adobe module that exports those
+functions, shipped as `dvaui.dll`. The mod also finds it under another name,
+but a build that exports the functions nowhere cannot be themed that way; with
+mod logging on, such a session says the interface layer is not installed
+instead of failing quietly.
+
 ## Known limitations
 
 Two surfaces need a word of their own, and the mod says so in its log rather
