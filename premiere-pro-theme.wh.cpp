@@ -334,6 +334,19 @@ squeezed very narrow keeps Premiere's own gray while the other one is themed.
 The black *inside* the sequence frame is the rendered picture, not chrome, and
 stays black in every palette.
 
+**The dropdown menus are dark, not palette-colored.** The menu bar itself is
+painted here, item by item; the menus that drop out of it, and the right-click
+menus, are drawn by Windows with the dark menu theme this mod switches on.
+Measured on Windows 11 build 26200: the theme those menus draw with never
+passes through any of the four entry points the mod watches, and their items
+arrive as a theme part it does not paint. So on that build the switch buys
+them dark rather than the palette.
+
+**A menu taller than the screen** grows a small scroll button at each end.
+Windows paints those outside the theme system altogether — no draw the mod can
+see covers that rectangle — so they keep the light system color while the menu
+around them is dark.
+
 ## Compatibility
 
 The mod looks up each color function by name at startup, installs the ones the
@@ -481,7 +494,10 @@ This mod is MIT as well.
   $description: Immersive dark mode, title bar, border and native dialogs.
 - menuHook: true
   $name: Menu bar and menus
-  $description: Paints the File/Edit/Clip bar and the dropdown menus in the palette, instead of white or the Windows default gray.
+  $description: >-
+    Paints the File/Edit/Clip bar in the palette, and turns the menus that drop
+    out of it dark instead of white. On Windows 11 those menus take Windows'
+    own dark menu style rather than the palette; the readme says why.
 - gdiHook: true
   $name: GDI surfaces
   $description: Darkens GDI brushes, pens and text backgrounds created by Premiere's own modules.

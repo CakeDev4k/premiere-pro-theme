@@ -126,8 +126,7 @@ instead of failing quietly.
 
 ## Known limitations
 
-Two surfaces need a word of their own, and the mod says so in its log rather
-than leaving you to guess:
+Three surfaces need a word of their own:
 
 - **UXP panels follow a change after a restart**, which is why that layer ships
   off. The Text panel, Import, Export and the Home screen read their
@@ -142,8 +141,15 @@ than leaving you to guess:
   it does not own. Turned on, it goes in either from the device Premiere
   creates or, when the switch is flipped later, from one of the mod's own —
   no restart in either direction.
+- **The dropdown menus are dark, not palette-colored.** The menu bar takes the
+  palette, item by item. The menus themselves are drawn by Windows, with the
+  dark menu theme the mod switches on: measured on Windows 11 build 26200,
+  their theme never passes through the entry points the mod watches, and their
+  items arrive as a part it does not paint. A menu taller than the screen also
+  grows a small scroll button at each end, which Windows paints outside the
+  theme system entirely, so those stay light.
 
-## How those two work
+## How the UXP layer and the band work
 
 The mod's own readme says what they do; this is how.
 
