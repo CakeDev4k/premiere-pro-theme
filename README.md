@@ -10,6 +10,12 @@ per color in the settings, down to the band behind the video. A theme is a
 block of YAML in the settings' own text mode, so it can be pasted straight in.
 Eight of the palettes also give Premiere's blue a hue of their own.
 
+The same code themes After Effects as
+[After Effects Theme](https://github.com/CakeDev4k/after-effects-theme). The two
+mods are one codebase kept as two, so that each app has a palette and switches
+of its own in Windhawk. A fix to the code they share goes into both, so a bug
+reported against either is worth checking in the other.
+
 ## Screenshots
 
 The same project, palette by palette. First, Premiere without the mod:
