@@ -720,9 +720,59 @@ static void TestStaticDisplaySurfaceTiming() {
     NoteWindowForStaticDisplaySurface(framed);
     CHECK(!IsDisplaySurfaceCall(inside));
 
+    /*
+        And the switch turned on long after startup, which is the one case the
+        two halves above cannot serve between them: the layer is not installed,
+        so no window create will publish, and Wh_ModAfterInit ran before any
+        window existed. Left to themselves they wait on each other forever —
+        nothing publishes, so nothing installs, so nothing publishes — and the
+        band keeps Premiere's gray with nothing logged. Wh_ModSettingsChanged
+        publishes for exactly this reason; this is the test of that shape.
+    */
+    InterlockedExchange(&g_staticDisplaySurfacePublished, FALSE);
+    InterlockedExchange(&g_monitorBandInstalled, FALSE);
+    SetDisplaySurfaceRange(0, 0);
+    g_staticDisplaySurfaceBegin.store(base, std::memory_order_relaxed);
+    g_staticDisplaySurfaceEnd.store(base + 0x60000, std::memory_order_release);
+
+    NoteWindowForStaticDisplaySurface(framed);
+    CHECK(!IsDisplaySurfaceCall(inside));
+
+    CHECK(HasFramedWindow());
+    PublishStaticDisplaySurface();
+    CHECK(IsDisplaySurfaceCall(inside));
+
+    SetDisplaySurfaceRange(0, 0);
+    InterlockedExchange(&g_staticDisplaySurfacePublished, FALSE);
+    g_staticDisplaySurfaceEnd.store(0, std::memory_order_release);
+    g_staticDisplaySurfaceBegin.store(0, std::memory_order_relaxed);
+
     InterlockedExchange(&g_monitorBandInstalled, FALSE);
     DestroyWindow(popup);
     DestroyWindow(framed);
+}
+
+/*
+    A vtable slot found by RTTI is pinned by the table's length, which catches
+    a virtual added or removed but not one replaced at the same count. What
+    another method returns is a bool, an int or an HRESULT, and reading four
+    floats from it would fault inside Premiere. Anything in the first page or
+    misaligned for a float is handed straight back.
+*/
+static void TestColorRefNotAColor() {
+    SetFakeInt(L"dvauiHook", 1);
+    g_fakePalette = L"onyx";
+    LoadSettings();
+
+    for (uintptr_t bad : {uintptr_t{0}, uintptr_t{1}, uintptr_t{0x80004005},
+                          uintptr_t{0xFFFF}, uintptr_t{0x10002}}) {
+        auto value = reinterpret_cast<const DvaColorRGBA*>(bad);
+        CHECK(ConvertColorRef(value) == value);
+    }
+
+    // A real color, at a real address, is still converted.
+    DvaColorRGBA panel = Gray(0x1D);
+    CHECK(ConvertColorRef(&panel) != &panel);
 }
 
 // The float4 a monitor draw carries, as the raw words the caller passed.
@@ -3218,6 +3268,7 @@ int main() {
     TestModuleRangeUnload();
     TestDisplaySurfaceRange();
     TestStaticDisplaySurfaceTiming();
+    TestColorRefNotAColor();
     TestMonitorBandColor();
     TestMonitorFullSurface();
     TestMonitorBandRecolor();
