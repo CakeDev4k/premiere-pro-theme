@@ -644,6 +644,87 @@ static void TestDisplaySurfaceRange() {
     CHECK(!IsDisplaySurfaceCall(inside));
 }
 
+/*
+    The executable standing in for the module, on a Premiere that ships none.
+
+    The whole point is the timing, because getting it wrong crashed Premiere.
+    The range is recorded at init and must reach neither IsDisplaySurfaceCall
+    nor InstallMonitorBandFromProbe — which reads it as proof that Premiere has
+    made its device — until two things are true: Premiere has made that device,
+    and a framed window says its interface is up.
+
+    Finding the renderer in a real executable needs one of those installed and
+    is in TestStaticToolkit. Here the probe's answer is planted, so the order
+    can be checked on any machine.
+*/
+static void TestStaticDisplaySurfaceTiming() {
+    const uintptr_t base = 0x520000000000;
+    void* inside = reinterpret_cast<void*>(base + 0x100);
+
+    SetFakeInt(L"monitorBand", 1);
+    LoadSettings();
+
+    HWND framed = CreateWindowExW(0, L"STATIC", L"", WS_OVERLAPPEDWINDOW, 0, 0, 10,
+                                  10, nullptr, nullptr, nullptr, nullptr);
+    HWND child = CreateWindowExW(0, L"STATIC", L"", WS_CHILD | WS_CAPTION, 0, 0, 10,
+                                 10, framed, nullptr, nullptr, nullptr);
+    HWND popup = CreateWindowExW(0, L"STATIC", L"", WS_POPUP, 0, 0, 10, 10, nullptr,
+                                 nullptr, nullptr, nullptr);
+
+    CHECK(framed && child && popup);
+
+    SetDisplaySurfaceRange(0, 0);
+    InterlockedExchange(&g_staticDisplaySurfacePublished, FALSE);
+    InterlockedExchange(&g_monitorBandInstalled, FALSE);
+    g_staticDisplaySurfaceBegin.store(base, std::memory_order_relaxed);
+    g_staticDisplaySurfaceEnd.store(base + 0x60000, std::memory_order_release);
+
+    /*
+        Recorded, and that alone changes nothing: this is Premiere starting up.
+        The probe latch must be clear, or the gate below would hold for the
+        wrong reason.
+    */
+    CHECK(!g_monitorBandTried);
+    CHECK(!IsDisplaySurfaceCall(inside));
+    CHECK(!InstallMonitorBandFromProbe());
+    CHECK(!g_monitorBandTried);
+
+    // Nor does a window before Premiere's device, whatever frame it has.
+    NoteWindowForStaticDisplaySurface(framed);
+    CHECK(!IsDisplaySurfaceCall(inside));
+
+    // Premiere's device is in, but the windows Premiere opens by the hundred
+    // before its own are still not the interface coming up.
+    InterlockedExchange(&g_monitorBandInstalled, TRUE);
+    NoteWindowForStaticDisplaySurface(child);
+    NoteWindowForStaticDisplaySurface(popup);
+    CHECK(!IsDisplaySurfaceCall(inside));
+
+    // Both true, and only now is the band this layer's business.
+    NoteWindowForStaticDisplaySurface(framed);
+    CHECK(IsDisplaySurfaceCall(inside));
+
+    // Published once: a later window cannot bring back a module that unloaded.
+    SetDisplaySurfaceRange(0, 0);
+    NoteWindowForStaticDisplaySurface(framed);
+    CHECK(!IsDisplaySurfaceCall(inside));
+
+    /*
+        And there is nothing to publish on a build that has the module, where
+        the probe records no candidate — the case every other test runs in.
+    */
+    InterlockedExchange(&g_staticDisplaySurfacePublished, FALSE);
+    g_staticDisplaySurfaceEnd.store(0, std::memory_order_release);
+    g_staticDisplaySurfaceBegin.store(0, std::memory_order_relaxed);
+
+    NoteWindowForStaticDisplaySurface(framed);
+    CHECK(!IsDisplaySurfaceCall(inside));
+
+    InterlockedExchange(&g_monitorBandInstalled, FALSE);
+    DestroyWindow(popup);
+    DestroyWindow(framed);
+}
+
 // The float4 a monitor draw carries, as the raw words the caller passed.
 static void SetRootColor(MonitorCommandState* state, float r, float g, float b,
                          float a) {
@@ -2005,6 +2086,52 @@ static void TestCustomTheme() {
     CHECK(logs == 1);
 
     /*
+        A color picker writes #RRGGBBAA, and the whole theme arrives that way
+        — every field of it. Refusing the alpha put each one back on Onyx with
+        only a log line to say so, which reads as a custom theme that changes
+        nothing at all. The alpha is dropped instead, whatever it says, and the
+        case is free.
+    */
+    p = ThemeFrom({{L"base", L"#080611ff"},
+                   {L"panel", L"#0D0A18ff"},
+                   {L"surface", L"#141027FF"},
+                   {L"raised", L"#1D1635ff"},
+                   {L"border", L"#3A2866ff"},
+                   {L"text", L"#F5EEFFFF"},
+                   {L"accent", L"#9B5CFF00"},
+                   {L"disabledText", L"#716A82FF"},
+                   {L"highlight", L"#00F0FFFF"},
+                   {L"monitor", L"#FF3CACFF"}},
+                  &logs);
+    CHECK(logs == 0);
+    CHECK(p.ramp[0] == RGB(0x08, 0x06, 0x11));
+    CHECK(p.ramp[1] == RGB(0x0D, 0x0A, 0x18));
+    CHECK(p.ramp[2] == RGB(0x14, 0x10, 0x27));
+    CHECK(p.ramp[3] == RGB(0x1D, 0x16, 0x35));
+    CHECK(p.ramp[4] == RGB(0x3A, 0x28, 0x66));
+    CHECK(p.text == RGB(0xF5, 0xEE, 0xFF));
+    CHECK(p.accent == RGB(0x9B, 0x5C, 0xFF));  // alpha 00 is still a color
+    CHECK(p.dimText == RGB(0x71, 0x6A, 0x82));
+    CHECK(p.highlight == RGB(0x00, 0xF0, 0xFF));
+    CHECK(p.monitor == RGB(0xFF, 0x3C, 0xAC));
+
+    // Six and eight are the two lengths there are; seven and nine are typos.
+    p = ThemeFrom({{L"base", L"#0806111"},
+                   {L"panel", L"#0D0A18ff0"},
+                   {L"surface", L"#141027"},
+                   {L"raised", L"#1D1635"},
+                   {L"border", L"#3A2866"},
+                   {L"text", L"#F5EEFF"}},
+                  &logs);
+    CHECK(logs == 2);
+    CHECK(p.ramp[0] == onyx.ramp[0]);
+    CHECK(p.ramp[1] == onyx.ramp[1]);
+    CHECK(p.ramp[2] == RGB(0x14, 0x10, 0x27));
+
+    // And the theme written out for sharing never carries an alpha back.
+    CHECK(wcsstr(g_lastShared, L"surface: '#141027'") != nullptr);
+
+    /*
         Every field empty: Onyx, one line per required color, and an accent
         that follows the border rather than Onyx's own.
     */
@@ -2928,6 +3055,154 @@ static void TestSlotSaturation() {
     CHECK(g_slotsFullLogged);
 }
 
+/*
+    The image, mapped the way Premiere itself has it: by the loader, which is
+    what makes the pointers inside it agree with where it sits. A plain
+    SEC_IMAGE view does not — the memory manager hands out the image section
+    as it stands, and while Premiere is running that is a copy relocated for
+    Premiere's base, so every vtable in it would point somewhere the view
+    does not cover. DONT_RESOLVE_DLL_REFERENCES maps and relocates it without
+    running a line of it or pulling its imports in.
+*/
+static HMODULE LoadImageForReading(const wchar_t* path) {
+    return LoadLibraryExW(path, nullptr, DONT_RESOLVE_DLL_REFERENCES);
+}
+
+/*
+    The toolkit linked into the executable, against a real one.
+
+    Every number in kContentVtables and beside the brush hooks was read off a
+    build; nothing else in the mod is a bare offset like that, and a wrong one
+    would hook a different method of the same class — UI_Swatch alone gained a
+    virtual between 2025 and 2026.3, which is what these lengths are there to
+    catch. So the image is mapped
+    here as the loader would map it and the layer is asked to find its entry
+    points in it for real — the names, the locators, the table lengths and the
+    bodies behind the two brush slots.
+
+    This is the one test that needs something installed: a Premiere whose
+    toolkit is linked in, which is 2026.3 and later. Without one there is
+    nothing to ask, and it says so rather than passing quietly.
+*/
+static void TestStaticToolkit() {
+    const wchar_t* path =
+        L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026\\"
+        L"Adobe Premiere Pro.exe";
+
+    HMODULE image = LoadImageForReading(path);
+
+    if (!image) {
+        std::printf("static toolkit: skipped, nothing to map at %ls\n", path);
+        return;
+    }
+
+    const char* kSupplier = ".?AVOSSupplier@d2d@drawbot@dvaui@@";
+    ULONGLONG started = GetTickCount64();
+    void* const* supplier = FindVtableByName(image, kSupplier, 29);
+
+    CHECK(supplier != nullptr);
+
+    if (supplier) {
+        // A pen is 0x98 bytes and a brush 0x30, and neither slot is the other.
+        CHECK(AllocatesObject(supplier[9], 0x98));
+        CHECK(AllocatesObject(supplier[10], 0x30));
+        CHECK(!AllocatesObject(supplier[9], 0x30));
+        CHECK(!AllocatesObject(supplier[10], 0x98));
+    }
+
+    // A length that is not the measured one is a layout this never saw.
+    CHECK(FindVtableByName(image, kSupplier, 28) == nullptr);
+
+    // And a name that is not in the image at all.
+    CHECK(FindVtableByName(image, ".?AVNotAClassOfPremiere@dvaui@@", 29) ==
+          nullptr);
+
+    /*
+        The monitor renderer went the same way as the toolkit, and the band
+        layer asks this image for it by name because there is no
+        DisplaySurface.dll left to ask for. Nothing is hooked off the class —
+        it is read as the module's presence used to be read.
+    */
+    CHECK(ImageHasClass(image, ".?AVDirectXSurface@DS@@"));
+    CHECK(!ImageHasClass(image, ".?AVNotAClassOfPremiere@DS@@"));
+
+    /*
+        The three virtual color functions, each in the class it is declared in.
+        `symbol` is an index into another table, so the entry is held against
+        the name that table carries: the decorated class name, minus the ".?AV"
+        a type descriptor starts with, is part of every method's mangled name.
+    */
+    for (const ColorVtable& where : kColorVtables) {
+        const char* mangled = kColorSymbols[where.symbol].mangled;
+        bool sameClass = std::strstr(mangled, where.className + 4) != nullptr;
+
+        if (!sameClass) {
+            std::printf("static toolkit: %s is not a method of %s\n", mangled,
+                        where.className);
+        }
+
+        CHECK(sameClass);
+
+        void* const* vtable =
+            FindVtableByName(image, where.className, where.slots);
+
+        if (!vtable) {
+            std::printf("static toolkit: no vtable for %s\n", where.className);
+        }
+
+        CHECK(vtable != nullptr);
+
+        if (vtable) {
+            CHECK(IsImageCode(image, vtable[where.index]));
+        }
+    }
+
+    for (size_t i = 0; i < kContentDrawCount; i++) {
+        const ContentVtable& where = kContentVtables[i];
+        void* const* vtable =
+            FindVtableByName(image, where.className, where.slots);
+
+        if (!vtable) {
+            std::printf("static toolkit: no vtable for %s\n", where.className);
+        }
+
+        CHECK(vtable != nullptr);
+
+        if (vtable) {
+            CHECK(IsImageCode(image, vtable[where.index]));
+        }
+    }
+
+    // The hook goes in where the body is the measured one, and nowhere else.
+    if (supplier) {
+        void* original = nullptr;
+        int before = g_hookCalls;
+        HookCount count;
+
+        InstallVtableHook(image, supplier, 10, 0x30,
+                          {nullptr, reinterpret_cast<void*>(NewBrush_Hook),
+                           &original, L"d2d::NewBrush"},
+                          &count);
+
+        CHECK(count.installed == 1);
+        CHECK(g_hookCalls == before + 1);
+
+        InstallVtableHook(image, supplier, 10, 0x98,
+                          {nullptr, reinterpret_cast<void*>(NewPen_Hook),
+                           &original, L"d2d::NewPen"},
+                          &count);
+
+        CHECK(count.installed == 1);
+        CHECK(count.missing == 1);
+        CHECK(g_hookCalls == before + 1);
+    }
+
+    std::printf("static toolkit: %llu ms to walk it\n",
+                GetTickCount64() - started);
+
+    FreeLibrary(image);
+}
+
 int main() {
     TestFibonacciIndex();
     TestColorTable();
@@ -2942,6 +3217,7 @@ int main() {
     TestKnownModules();
     TestModuleRangeUnload();
     TestDisplaySurfaceRange();
+    TestStaticDisplaySurfaceTiming();
     TestMonitorBandColor();
     TestMonitorFullSurface();
     TestMonitorBandRecolor();
@@ -2956,6 +3232,7 @@ int main() {
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
     TestColorModuleSearch();
+    TestStaticToolkit();
     TestMenuTextOptions();
     TestMenuBarGate();
     TestMenuBarTheme();
