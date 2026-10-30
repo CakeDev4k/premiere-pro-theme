@@ -50,6 +50,10 @@ Eight of the twenty-five, and the ones that cost the most rounds.
   a handle that may be recycled. `LoadLibrary` under the loader lock deadlocks.
 - What does this API assume about the shape of what it is given? Root parameter
   1 is not always a `float4`.
+- A slot taken by position carries the signature of its build, not the one the
+  table was measured at. The popup swatches gained an argument in 26.3 at the
+  same slot and the same table length, and only the sister mod's exports showed
+  it, so a fix found in After Effects Theme gets checked here too.
 - Can the call run on a thread, or at a time, the API does not expect?
 
 ## 4. Code that disagrees with what it says it does

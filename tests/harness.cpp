@@ -1482,6 +1482,66 @@ static void TestColorHookCounting() {
 }
 
 /*
+    The popup swatches took a SkinSetProvider* in 26.3. Either name is found,
+    the six arguments reach the draw in order, it runs inside a content scope,
+    and what the slot answers comes back.
+*/
+static uintptr_t g_swatchArgs[6];
+static int g_swatchDepth = -1;
+
+static uintptr_t FakeSwatchDraw(uintptr_t a, uintptr_t b, uintptr_t c, uintptr_t d,
+                                uintptr_t e, uintptr_t f) {
+    const uintptr_t args[] = {a, b, c, d, e, f};
+    std::memcpy(g_swatchArgs, args, sizeof(args));
+    g_swatchDepth = g_contentDepth;
+    return 77;
+}
+
+static int InstallContentHooksFrom(std::vector<const char*> exports) {
+    g_fakeExports = std::move(exports);
+    g_absentLogs = 0;
+    g_lastAbsent = nullptr;
+
+    InstallContentHooksImpl(kFakeDvaui, std::make_index_sequence<kContentDrawCount>{});
+    g_fakeExports.clear();
+    return g_absentLogs;
+}
+
+static void TestContentDrawNames() {
+    std::vector<const char*> newer, older;
+
+    for (const ColorSymbol& sym : kContentDraws) {
+        newer.push_back(sym.mangled);
+        older.push_back(sym.before2026 ? sym.before2026 : sym.mangled);
+    }
+
+    CHECK(kContentDrawCount == 5);
+
+    for (size_t popup : {size_t{3}, size_t{4}}) {
+        const ColorSymbol& sym = kContentDraws[popup];
+
+        CHECK(std::strstr(sym.mangled, "PEBVSkinSetProvider@") != nullptr);
+        CHECK(sym.before2026 && !std::strstr(sym.before2026, "SkinSetProvider"));
+    }
+
+    CHECK(InstallContentHooksFrom(newer) == 0);  // 26.3
+    CHECK(InstallContentHooksFrom(older) == 0);  // the builds before it
+
+    // Under neither name: each is reported once, by its label.
+    CHECK(InstallContentHooksFrom({newer.begin(), newer.begin() + 3}) == 2);
+    CHECK(g_lastAbsent && wcscmp(g_lastAbsent, L"V6PopupSkin::DrawColorSwatch") == 0);
+
+    ContentDrawHook<3>::original = FakeSwatchDraw;
+    CHECK(ContentDrawHook<3>::Hook(11, 22, 33, 44, 55, 66) == 77);
+    ContentDrawHook<3>::original = nullptr;
+
+    const uintptr_t expected[] = {11, 22, 33, 44, 55, 66};
+    CHECK(std::memcmp(g_swatchArgs, expected, sizeof(expected)) == 0);
+    CHECK(g_swatchDepth == 1);
+    CHECK(g_contentDepth == 0);
+}
+
+/*
     A Premiere that does not ship dvaui.dll: the toolkit is looked for by
     symbol instead. Premiere 2026 exports ui::GetGrayColor from
     dvaworkspace.dll as well, and that module carries 11 of the 26 functions
@@ -2533,6 +2593,25 @@ static void TestHighlight() {
     Reload();
 }
 
+// A call that ends in rgb( is not a color, whatever its arguments look like.
+static void TestCssColorFunction() {
+    g_fakePalette = L"onyx";
+    LoadSettings();
+
+    char css[] =
+        ".a{color:rgb(18, 18, 18)}.b{color:setRgb(18, 18, 18)}"
+        ".c{color:rgba(18, 18, 18, 1)}.d{color:toRgba(18, 18, 18, 1)}";
+    const std::string original = css;
+
+    CHECK(RecolorStylesheet(css, original.size()) == 2);
+
+    const std::string s = css;
+    CHECK(s.find(".a{color:rgb(18, 18, 18)}") == std::string::npos);
+    CHECK(s.find(".b{color:setRgb(18, 18, 18)}") != std::string::npos);
+    CHECK(s.find(".c{color:rgba(18, 18, 18, 1)}") == std::string::npos);
+    CHECK(s.find(".d{color:toRgba(18, 18, 18, 1)}") != std::string::npos);
+}
+
 static void TestStylesheetRewrite() {
     g_fakePalette = L"onyx";
     LoadSettings();
@@ -3124,16 +3203,34 @@ static HMODULE LoadImageForReading(const wchar_t* path) {
     Every number in kContentVtables and beside the brush hooks was read off a
     build; nothing else in the mod is a bare offset like that, and a wrong one
     would hook a different method of the same class — UI_Swatch alone gained a
-    virtual between 2025 and 2026.3, which is what these lengths are there to
-    catch. So the image is mapped
+    virtual between 2025 and 2026.3, and three more by 2026.5, which is what
+    these lengths are there to catch. So the image is mapped
     here as the loader would map it and the layer is asked to find its entry
     points in it for real — the names, the locators, the table lengths and the
     bodies behind the two brush slots.
 
     This is the one test that needs something installed: a Premiere whose
     toolkit is linked in, which is 2026.3 and later. Without one there is
-    nothing to ask, and it says so rather than passing quietly.
+    nothing to ask, and it says so rather than passing quietly;
+    TestLayoutsInModule covers the build that keeps the toolkit in a module.
 */
+static void CheckTableInImage(HMODULE image, const char* className,
+                              const VtableLayout* layouts) {
+    size_t slots = 0;
+    void* const* vtable = FindVtableByName(image, className, layouts, &slots);
+    const VtableLayout* layout = vtable ? LayoutOfLength(layouts, slots) : nullptr;
+
+    if (!layout) {
+        std::printf("static toolkit: no vtable for %s\n", className);
+    }
+
+    CHECK(layout != nullptr);
+
+    if (layout) {
+        CHECK(IsImageCode(image, vtable[layout->index]));
+    }
+}
+
 static void TestStaticToolkit() {
     const wchar_t* path =
         L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026\\"
@@ -3146,9 +3243,15 @@ static void TestStaticToolkit() {
         return;
     }
 
-    const char* kSupplier = ".?AVOSSupplier@d2d@drawbot@dvaui@@";
+    if (!ImageHasClass(image, kSupplierClass)) {
+        std::printf("static toolkit: skipped, this Premiere keeps it in a module\n");
+        FreeLibrary(image);
+        return;
+    }
+
     ULONGLONG started = GetTickCount64();
-    void* const* supplier = FindVtableByName(image, kSupplier, 29);
+    void* const* supplier =
+        FindVtableByName(image, kSupplierClass, kSupplierLayouts, nullptr);
 
     CHECK(supplier != nullptr);
 
@@ -3161,11 +3264,15 @@ static void TestStaticToolkit() {
     }
 
     // A length that is not the measured one is a layout this never saw.
-    CHECK(FindVtableByName(image, kSupplier, 28) == nullptr);
+    const VtableLayout kWrongLength[kMostLayouts] = {{28, 0}};
+
+    CHECK(FindVtableByName(image, kSupplierClass, kWrongLength, nullptr) == nullptr);
 
     // And a name that is not in the image at all.
-    CHECK(FindVtableByName(image, ".?AVNotAClassOfPremiere@dvaui@@", 29) ==
-          nullptr);
+    CHECK(FindVtableByName(image, ".?AVNotAClassOfPremiere@dvaui@@",
+                           kSupplierLayouts, nullptr) == nullptr);
+
+    CheckTableInImage(image, kSurfaceClass, kSurfaceLayouts);
 
     /*
         The monitor renderer went the same way as the toolkit, and the band
@@ -3192,35 +3299,11 @@ static void TestStaticToolkit() {
         }
 
         CHECK(sameClass);
-
-        void* const* vtable =
-            FindVtableByName(image, where.className, where.slots);
-
-        if (!vtable) {
-            std::printf("static toolkit: no vtable for %s\n", where.className);
-        }
-
-        CHECK(vtable != nullptr);
-
-        if (vtable) {
-            CHECK(IsImageCode(image, vtable[where.index]));
-        }
+        CheckTableInImage(image, where.className, where.layouts);
     }
 
-    for (size_t i = 0; i < kContentDrawCount; i++) {
-        const ContentVtable& where = kContentVtables[i];
-        void* const* vtable =
-            FindVtableByName(image, where.className, where.slots);
-
-        if (!vtable) {
-            std::printf("static toolkit: no vtable for %s\n", where.className);
-        }
-
-        CHECK(vtable != nullptr);
-
-        if (vtable) {
-            CHECK(IsImageCode(image, vtable[where.index]));
-        }
+    for (const ContentVtable& where : kContentVtables) {
+        CheckTableInImage(image, where.className, where.layouts);
     }
 
     // The hook goes in where the body is the measured one, and nowhere else.
@@ -3249,6 +3332,145 @@ static void TestStaticToolkit() {
 
     std::printf("static toolkit: %llu ms to walk it\n",
                 GetTickCount64() - started);
+
+    FreeLibrary(image);
+}
+
+// The lists themselves, which need nothing installed.
+static void TestVtableLayouts() {
+    const VtableLayout two[kMostLayouts] = {{139, 29}, {142, 30}};
+
+    CHECK(LayoutOfLength(two, 139)->index == 29);
+    CHECK(LayoutOfLength(two, 142)->index == 30);
+    CHECK(LayoutOfLength(two, 140) == nullptr);
+    CHECK(LayoutOfLength(two, 0) == nullptr);  // the end of a list is no length
+
+    // A list with no room left for a terminator still stops at its own end.
+    const VtableLayout full[kMostLayouts + 1] = {
+        {1, 10}, {2, 20}, {3, 30}, {4, 40}, {5, 50}};
+
+    CHECK(LayoutOfLength(full, 4)->index == 40);
+    CHECK(LayoutOfLength(full, 5) == nullptr);
+
+    // The rectangle fill stayed where it was when its table grew.
+    CHECK(LayoutOfLength(kSurfaceLayouts, 46)->index == 7);
+    CHECK(LayoutOfLength(kSurfaceLayouts, 48)->index == 7);
+
+    CHECK(LayoutOfLength(kContentVtables[0].layouts, 139)->index == 29);
+    CHECK(LayoutOfLength(kContentVtables[0].layouts, 142)->index == 30);
+
+    // ThemeClient's two hooks are one table, and Theme's is another.
+    CHECK(SameLengths(kColorVtables[1].layouts, kColorVtables[2].layouts));
+    CHECK(!SameLengths(kColorVtables[0].layouts, kColorVtables[1].layouts));
+}
+
+// That the entry `layouts` picks in `image` is the function called `mangled`.
+static void CheckSlotIsNamed(HMODULE image, const char* className,
+                             const VtableLayout* layouts, const char* mangled) {
+    size_t slots = 0;
+    void* const* vtable = FindVtableByName(image, className, layouts, &slots);
+    const VtableLayout* layout = vtable ? LayoutOfLength(layouts, slots) : nullptr;
+    FARPROC exported = RealGetProcAddress(image, mangled);
+
+    if (!layout || !exported) {
+        std::printf("module toolkit: %s not found through %s\n", mangled, className);
+    }
+
+    CHECK(layout != nullptr);
+    CHECK(exported != nullptr);
+
+    if (layout && exported) {
+        CHECK(vtable[layout->index] == reinterpret_cast<void*>(exported));
+    }
+}
+
+/*
+    The same tables against a dvaui.dll, the one place their contents can be
+    read by name. A number the RTTI path uses is held against the export that
+    number is meant to reach, which a build without exports cannot show. Needs
+    a Premiere that ships the module; without one it says it skipped.
+*/
+static void TestLayoutsInModule() {
+    const wchar_t* path =
+        L"C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026\\dvaui.dll";
+
+    HMODULE image = LoadImageForReading(path);
+
+    if (!image) {
+        std::printf("module toolkit: skipped, nothing to map at %ls\n", path);
+        return;
+    }
+
+    for (const ColorVtable& where : kColorVtables) {
+        CheckSlotIsNamed(image, where.className, where.layouts,
+                         ExportedName(image, kColorSymbols[where.symbol]));
+    }
+
+    for (size_t i = 0; i < kContentDrawCount; i++) {
+        CheckSlotIsNamed(image, kContentVtables[i].className,
+                         kContentVtables[i].layouts,
+                         ExportedName(image, kContentDraws[i]));
+    }
+
+    CheckSlotIsNamed(image, kSurfaceClass, kSurfaceLayouts,
+                     "?PaintRect@OSSurfaceInterface@d2d@drawbot@dvaui@@UEAAX"
+                     "AEBVColorRGBA@34@AEBV?$RectT@M@geom@dvacore@@@Z");
+
+    void* const* supplier =
+        FindVtableByName(image, kSupplierClass, kSupplierLayouts, nullptr);
+
+    CHECK(supplier != nullptr);
+
+    if (supplier) {
+        CHECK(AllocatesObject(supplier[9], 0x98));
+        CHECK(AllocatesObject(supplier[10], 0x30));
+    }
+
+    // A length this build does not have is passed over for the one it has.
+    const char* kSwatch = kContentVtables[0].className;
+    const VtableLayout kLater[kMostLayouts] = {{999, 1}, {139, 29}};
+    const VtableLayout kOnlyOther[kMostLayouts] = {{999, 1}};
+    size_t slots = 0;
+
+    CHECK(FindVtableByName(image, kSwatch, kLater, &slots) != nullptr);
+    CHECK(slots == 139);
+    CHECK(FindVtableByName(image, kSwatch, kOnlyOther, nullptr) == nullptr);
+
+    // Refused on the way in, and counted as a miss rather than hooked.
+    HookCount count;
+    void* original = nullptr;
+    int before = g_hookCalls;
+
+    g_foundVtableCount = 0;
+    InstallHookFromVtable(image, kSwatch, kOnlyOther, L"UI_Swatch::UI_Draw",
+                          reinterpret_cast<void*>(NewBrush_Hook), &original, &count);
+    CHECK(count.installed == 0);
+    CHECK(count.missing == 1);
+    CHECK(g_hookCalls == before);
+
+    InstallHookFromVtable(image, kSwatch, kContentVtables[0].layouts,
+                          L"UI_Swatch::UI_Draw",
+                          reinterpret_cast<void*>(NewBrush_Hook), &original, &count);
+    CHECK(count.installed == 1);
+    CHECK(g_hookCalls == before + 1);
+
+    // ThemeClient's two hooks have a list each and share one search.
+    g_foundVtableCount = 0;
+
+    size_t first = 0;
+    size_t second = 0;
+    void* const* one = FindVtableOnce(image, kColorVtables[1].className,
+                                      kColorVtables[1].layouts, &first);
+    void* const* other = FindVtableOnce(image, kColorVtables[2].className,
+                                        kColorVtables[2].layouts, &second);
+
+    CHECK(one != nullptr);
+    CHECK(one == other);
+    CHECK(first == 18);
+    CHECK(second == 18);
+    CHECK(g_foundVtableCount == 1);
+
+    g_foundVtableCount = 0;
 
     FreeLibrary(image);
 }
@@ -3282,7 +3504,10 @@ int main() {
     TestGdiOrder();
     TestGdiMatchesOldFormula();
     TestColorHookCounting();
+    TestContentDrawNames();
     TestColorModuleSearch();
+    TestVtableLayouts();
+    TestLayoutsInModule();
     TestStaticToolkit();
     TestMenuTextOptions();
     TestMenuBarGate();
@@ -3296,6 +3521,7 @@ int main() {
     TestThemeForSharing();
     TestHighlight();
     TestStylesheetRewrite();
+    TestCssColorFunction();
     TestStylesheetChromeCeiling();
     TestTokenTableRewrite();
     TestBundledStylesheetPath();

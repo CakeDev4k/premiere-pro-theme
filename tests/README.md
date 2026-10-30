@@ -11,7 +11,8 @@ the Windhawk API stubbed out. They cover:
   design tokens in the panel's own script, including that an icon stroke and a
   loose string beside them are left alone;
 - the file redirect on real temporary files, for a stylesheet and for a script,
-  including that the copy carries the extension of the file it stands in for;
+  including that the copy carries the extension of the file it stands in for,
+  and that a call such as `setRgb(18, 18, 18)` is not taken for a color;
 - the custom theme fields, checked against the defaults the settings block
   itself ships, including a whole theme written as #RRGGBBAA by a color picker
   — the alpha is dropped rather than the field refused — and the theme the mod
@@ -40,13 +41,23 @@ the Windhawk API stubbed out. They cover:
   untouched;
 - the menu theme bookkeeping;
 - how the renamed dvaui functions are counted;
+- the popup swatches under either of their names, the six arguments 26.3 gives
+  them passed through in order, inside a content scope, with what the slot
+  answers passed back;
+- the lists of measured vtable layouts: a length on the list gives its own
+  slot, the end of a list is no length, and two hooks in one table share one
+  search;
+- the same layouts against a real `dvaui.dll`, where the slots have names: each
+  one a table gives is held against the export it is meant to reach, and a list
+  with no length the build has is refused and counted as a miss. This needs a
+  Premiere that ships the module; without one it says it skipped;
 - the toolkit linked into the executable, against a real one: the installed
   Premiere is mapped the way the loader maps it and every entry point is looked
   up in it for real — the class names, the locators, the table lengths, the
   bodies behind the two brush slots, that the monitor renderer is in there
   under its own name, and that a length or a body that is not the measured one
-  is refused. This is the one test that needs something
-  installed, a Premiere 2026.3 or later; without one it says it skipped.
+  is refused. This needs a Premiere 2026.3 or later; on any other it says it
+  skipped.
 
 Run them from the repository root, with Windhawk and PowerShell 7 installed:
 
