@@ -773,6 +773,19 @@ static void TestColorRefNotAColor() {
     // A real color, at a real address, is still converted.
     DvaColorRGBA panel = Gray(0x1D);
     CHECK(ConvertColorRef(&panel) != &panel);
+
+    // The fill path is taken by position too (PaintRect), and refuses the same.
+    SetFakeInt(L"brushHook", 1);
+    LoadSettings();
+
+    for (uintptr_t bad : {uintptr_t{0}, uintptr_t{1}, uintptr_t{0x80004005},
+                          uintptr_t{0xFFFF}, uintptr_t{0x10002}}) {
+        DvaColorRGBA out{};
+        CHECK(!PaintFromBelow(reinterpret_cast<const DvaColorRGBA*>(bad), &out));
+    }
+
+    DvaColorRGBA out{};
+    CHECK(PaintFromBelow(&panel, &out));
 }
 
 // The float4 a monitor draw carries, as the raw words the caller passed.
