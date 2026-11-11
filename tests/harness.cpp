@@ -3355,9 +3355,24 @@ static void TestVtableLayouts() {
     // The rectangle fill stayed where it was when its table grew.
     CHECK(LayoutOfLength(kSurfaceLayouts, 46)->index == 7);
     CHECK(LayoutOfLength(kSurfaceLayouts, 48)->index == 7);
+    CHECK(LayoutOfLength(kSurfaceLayouts, 50)->index == 7);
+
+    // 27.0's supplier, which gates the whole layer.
+    CHECK(LayoutOfLength(kSupplierLayouts, 29) != nullptr);
+    CHECK(LayoutOfLength(kSupplierLayouts, 34) != nullptr);
 
     CHECK(LayoutOfLength(kContentVtables[0].layouts, 139)->index == 29);
     CHECK(LayoutOfLength(kContentVtables[0].layouts, 142)->index == 30);
+    CHECK(LayoutOfLength(kContentVtables[0].layouts, 149)->index == 31);
+
+    // Every list stays in step: a longer table never moves a slot backwards.
+    for (const ContentVtable& where : kContentVtables) {
+        for (size_t i = 1; i < kMostLayouts && where.layouts[i].slots; i++) {
+            CHECK(where.layouts[i].slots > where.layouts[i - 1].slots);
+            CHECK(where.layouts[i].index >= where.layouts[i - 1].index);
+            CHECK(where.layouts[i].index < where.layouts[i].slots);
+        }
+    }
 
     // ThemeClient's two hooks are one table, and Theme's is another.
     CHECK(SameLengths(kColorVtables[1].layouts, kColorVtables[2].layouts));
@@ -3435,6 +3450,17 @@ static void TestLayoutsInModule() {
     CHECK(FindVtableByName(image, kSwatch, kLater, &slots) != nullptr);
     CHECK(slots == 139);
     CHECK(FindVtableByName(image, kSwatch, kOnlyOther, nullptr) == nullptr);
+
+    // A refusal still says what length it met, which is the next measurement.
+    slots = 1;
+    CHECK(FindVtableByName(image, kSwatch, kOnlyOther, &slots) == nullptr);
+    CHECK(slots == 139);
+
+    // A class that is not there has no length to report.
+    slots = 1;
+    CHECK(FindVtableByName(image, ".?AVNotAClassOfPremiere@dvaui@@", kOnlyOther,
+                           &slots) == nullptr);
+    CHECK(slots == 0);
 
     // Refused on the way in, and counted as a miss rather than hooked.
     HookCount count;
